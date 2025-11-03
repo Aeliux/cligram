@@ -1,5 +1,5 @@
 import asyncio
-from ast import List
+from typing import List
 
 import typer
 
