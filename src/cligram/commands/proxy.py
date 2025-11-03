@@ -20,16 +20,22 @@ def _get_proxy_title(proxy: Proxy, use_url) -> str:
 
 
 async def run_tests(
-    proxy_manager: ProxyManager, shutdown_event: asyncio.Event, use_url: bool = False
+    proxy_manager: ProxyManager,
+    shutdown_event: asyncio.Event,
+    use_url: bool = False,
+    timeout: float = 30.0,
 ):
     if shutdown_event is None:
         shutdown_event = asyncio.Event()
+
+    typer.echo(f"Testing {len(proxy_manager.proxies)} proxies...")
 
     results = []
 
     try:
         results = await proxy_manager.test_proxies(
             shutdown_event=shutdown_event,
+            timeout=timeout,
         )
         for result in results:
             status = (
@@ -117,6 +123,7 @@ def test_proxies(
     show_url: bool = typer.Option(
         False, "--show-url", help="Show full proxy URL in the output"
     ),
+    timeout: float = typer.Option(30.0, "--timeout", "-t", help="Timeout in seconds"),
 ):
     """
     Test all configured proxies and report their status.
@@ -126,7 +133,9 @@ def test_proxies(
     for proxy in config.telegram.proxies:
         proxy_manager.add_proxy(proxy)
 
-    asyncio.run(run_tests(proxy_manager, shutdown_event=None, use_url=show_url))
+    asyncio.run(
+        run_tests(proxy_manager, shutdown_event=None, use_url=show_url, timeout=timeout)
+    )
 
 
 @app.command("remove")
