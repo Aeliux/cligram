@@ -7,6 +7,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+GLOBAL_CONFIG_DIR = Path.home() / ".cligram"
+
 
 class WorkMode(Enum):
     """Operation modes for the scanner."""
@@ -318,7 +320,7 @@ class Config:
 
     @classmethod
     def from_file(
-        cls, config_path: str = "config.json", cli_args: Optional[Dict[str, Any]] = None
+        cls, config_path: str = "config.json", overrides: Optional[List[str]] = None
     ) -> "Config":
         """Load configuration from JSON file with CLI overrides."""
         config_full_path = Path(config_path).resolve()
@@ -339,9 +341,10 @@ class Config:
             path=config_full_path,
         )
 
-        # Apply CLI overrides
-        if cli_args:
-            config._apply_cli_overrides(cli_args)
+        # Apply overrides
+        if overrides:
+            for override in overrides:
+                config.apply_override(override)
 
         # Check if config structure changed (new fields added)
         new_data = config.to_dict()
@@ -353,35 +356,6 @@ class Config:
             cls._config_instance = config
 
         return config
-
-    def _apply_cli_overrides(self, cli_args: Dict[str, Any]):
-        """Apply command-line argument overrides."""
-        # Handle legacy flat arguments
-        if "mode" in cli_args and cli_args["mode"]:
-            self.app.mode = WorkMode(cli_args["mode"])
-        if "test" in cli_args and cli_args["test"]:
-            self.scan.test = True
-        if "verbose" in cli_args and cli_args["verbose"]:
-            self.app.verbose = True
-        if "rapid_save" in cli_args and cli_args["rapid_save"]:
-            self.app.rapid_save = True
-        if "session" in cli_args and cli_args["session"]:
-            self.telegram.session = cli_args["session"]
-        if "limit" in cli_args and cli_args["limit"]:
-            self.scan.limit = cli_args["limit"]
-        if "proxy" in cli_args and cli_args["proxy"]:
-            self.telegram.proxies = [cli_args["proxy"]]
-        if "exclude" in cli_args and cli_args["exclude"]:
-            with open(cli_args["exclude"], "r") as f:
-                exclusions = json.load(f)
-                self.exclusions = (
-                    exclusions if isinstance(exclusions, list) else [exclusions]
-                )
-
-        # Handle dot notation overrides
-        if "overrides" in cli_args and cli_args["overrides"]:
-            for override in cli_args["overrides"]:
-                self.apply_override(override)
 
     def apply_override(self, override_str: str):
         """
@@ -420,14 +394,10 @@ class Config:
     def save(self, path: Optional[str] = None):
         """Save configuration to JSON file."""
         save_path = Path(path) if path else self.path
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+
         with open(save_path, "w") as f:
             json.dump(self.to_dict(), f, indent=2)
-
-    @classmethod
-    def create_default_config(cls, path: str = "config.json"):
-        """Create a default configuration file."""
-        default_config = cls()
-        default_config.save(path)
 
     def _parse_value(self, value_str: str) -> Any:
         """Parse string value to appropriate Python type."""
@@ -589,3 +559,25 @@ class Config:
         # Save updated config
         with open(config_path, "w") as f:
             json.dump(new_data, f, indent=2)
+
+
+def get_search_paths() -> List[Path]:
+    """Get a list of all configuration search paths."""
+    return [Path.cwd(), GLOBAL_CONFIG_DIR]
+
+
+def find_config_file(raise_error: bool = False) -> Optional[Path]:
+    """Search for configuration file in standard locations."""
+    search_paths = get_search_paths()
+    config_filenames = ["config.json", "cligram_config.json"]
+
+    for search_dir in search_paths:
+        for filename in config_filenames:
+            candidate = search_dir / filename
+            if candidate.exists():
+                return candidate.resolve()
+
+    if raise_error:
+        raise FileNotFoundError("No configuration file found in standard locations.")
+
+    return None

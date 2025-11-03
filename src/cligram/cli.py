@@ -3,7 +3,8 @@ from typing import List, Optional
 
 import typer
 
-from .config import Config, WorkMode
+from . import commands
+from .config import Config, WorkMode, find_config_file
 from .session import CustomSession
 
 
@@ -22,15 +23,7 @@ def validate_config_path(value: Path) -> Path:
     """
     resolved_path = value.resolve()
     if not resolved_path.exists():
-        typer.echo("Config file does not exist, creating default config...")
-
-        # create a default config file
-        Config.create_default_config(resolved_path)
-        typer.echo(f"Created default config file at: {resolved_path}")
-        typer.echo(
-            "Please review and update the configuration file as needed before running again."
-        )
-        raise typer.Exit()
+        raise typer.BadParameter(f"Config file does not exist: {resolved_path}")
     if resolved_path.is_dir():
         raise typer.BadParameter(f"Config path points to a directory: {resolved_path}")
 
@@ -42,29 +35,18 @@ app = typer.Typer(
     add_completion=False,
 )
 
+app.add_typer(commands.config.app, name="config")
+app.add_typer(commands.session.app, name="session")
+
 
 @app.command()
 def run(
     ctx: typer.Context,
-    verbose: bool = typer.Option(
-        False, "-v", "--verbose", help="Enable detailed debug logging output to console"
-    ),
     test: bool = typer.Option(
         False, "-t", "--test", help="Run in test mode without sending actual messages"
     ),
-    list: bool = typer.Option(False, "--list", help="List all available sessions"),
     rapid_save: bool = typer.Option(
         False, "--rapid-save", help="Enable rapid state saving to disk"
-    ),
-    config_path: Path = typer.Option(
-        Path("config.json"),
-        "-c",
-        "--config",
-        help="Path to JSON configuration file with all settings",
-        callback=validate_config_path,
-    ),
-    print_config: bool = typer.Option(
-        False, "--print-config", help="Print the loaded configuration and exit"
     ),
     query: Optional[str] = typer.Option(
         None,
@@ -92,6 +74,31 @@ def run(
         "--exclude",
         help="JSON file with usernames to exclude from processing",
     ),
+):
+    """Telegram message scanner and forwarder."""
+
+    if query:
+        result = config.get_nested_value(query)
+        typer.echo(f"{query}={result}")
+        raise typer.Exit()
+    from .app import Application
+
+    app = Application(config=config, **args)
+    app.start()
+
+
+@app.callback()
+def callback(
+    ctx: typer.Context,
+    config: Path = typer.Option(
+        None,
+        "-c",
+        "--config",
+        help="Path to JSON configuration file",
+    ),
+    verbose: bool = typer.Option(
+        False, "-v", "--verbose", help="Enable detailed debug logging output to console"
+    ),
     overrides: Optional[List[str]] = typer.Option(
         None,
         "-o",
@@ -99,37 +106,20 @@ def run(
         help="Override config values using dot notation (e.g., app.verbose=true)",
     ),
 ):
-    """Telegram message scanner and forwarder."""
-    args = {
-        k: v
-        for k, v in locals().items()
-        if k not in ["ctx", "Application"] and v is not None
-    }
-    config = Config.from_file(config_path=config_path, cli_args=args)
+    """
+    CLI entry point for cligram application.
+    """
+    ctx.obj = {}
 
-    if print_config:
-        flatted = Config._flatten_dict(config.to_dict())
-        for key, value in flatted.items():
-            typer.echo(f"{key}={value}")
-        raise typer.Exit()
-    elif query:
-        result = config.get_nested_value(query)
-        typer.echo(f"{query}={result}")
-        raise typer.Exit()
-    elif list:
-        sessions = CustomSession.list_sessions()
-        if sessions:
-            typer.echo("Available sessions:")
-            for s in sessions:
-                typer.echo(f" - {s}")
-        else:
-            typer.echo("No sessions found.")
-        raise typer.Exit()
+    def do_load() -> Config:
+        nonlocal config, verbose, overrides
+        config = config or find_config_file(raise_error=True)
+        loaded_config = Config.from_file(config, overrides=overrides)
+        if verbose:
+            loaded_config.app.verbose = True
+        return loaded_config
 
-    from .app import Application
-
-    app = Application(config=config, **args)
-    app.start()
+    ctx.obj["g_load_config"] = do_load
 
 
 def main():

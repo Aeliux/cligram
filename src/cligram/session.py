@@ -57,11 +57,11 @@ class CustomSession(SQLiteSession):
                     found_path = candidate
                     break
 
-            # If not found, create in first path
+            # If not found, create in last path
             if found_path is None:
-                first_dir = search_paths[0]
-                first_dir.mkdir(parents=True, exist_ok=True)
-                found_path = first_dir / f"{session_id}.session"
+                last_dir = search_paths[-1]
+                last_dir.mkdir(parents=True, exist_ok=True)
+                found_path = last_dir / f"{session_id}.session"
 
             super().__init__(str(found_path))
         self._initialize_metadata_table()
