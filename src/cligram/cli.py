@@ -130,3 +130,7 @@ def run(
 
     app = Application(config=config, **args)
     app.start()
+
+
+def main():
+    app()
