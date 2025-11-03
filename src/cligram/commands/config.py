@@ -83,7 +83,8 @@ def set_config(
 ):
     """Set a specific configuration value."""
     config: Config = ctx.obj["g_load_config"]()
-    config._set_nested_value(key, value)
+    parsed_value = config._parse_value(value)
+    config._set_nested_value(key, parsed_value)
     config.save()
     nvalue = config.get_nested_value(key)
     typer.echo(f"{key}={nvalue}")

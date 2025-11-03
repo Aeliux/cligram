@@ -375,7 +375,6 @@ class Config:
 
         path, value_str = override_str.split("=", 1)
         path = path.strip()
-        value_str = value_str.strip()
 
         # Parse value
         value = self._parse_value(value_str)
@@ -402,8 +401,11 @@ class Config:
     def _parse_value(self, value_str: str) -> Any:
         """Parse string value to appropriate Python type."""
         # Boolean
+        value_str = value_str.strip()
+
         if value_str.lower() in ("true", "yes", "1"):
             return True
+
         if value_str.lower() in ("false", "no", "0"):
             return False
 
