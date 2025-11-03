@@ -1,3 +1,3 @@
-from . import config, session
+from . import config, proxy, session
 
-__all__ = ["session", "config"]
+__all__ = ["config", "session", "proxy"]

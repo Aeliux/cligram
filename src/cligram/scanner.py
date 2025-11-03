@@ -674,9 +674,8 @@ class TelegramScanner:
         """
         try:
             # Test proxies and get working one
-            working_proxy = await self.proxy_manager.test_proxies(
-                shutdown_event=shutdown_event
-            )
+            await self.proxy_manager.test_proxies(shutdown_event=shutdown_event)
+            working_proxy = self.proxy_manager.current_proxy
 
             if shutdown_event.is_set():
                 return

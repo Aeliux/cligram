@@ -37,6 +37,7 @@ app = typer.Typer(
 
 app.add_typer(commands.config.app, name="config")
 app.add_typer(commands.session.app, name="session")
+app.add_typer(commands.proxy.app, name="proxy")
 
 
 @app.command()
@@ -61,12 +62,6 @@ def run(
     ),
     limit: Optional[int] = typer.Option(
         None, "-l", "--limit", help="Maximum number of messages to process per group"
-    ),
-    proxy: Optional[str] = typer.Option(
-        None,
-        "-p",
-        "--proxy",
-        help="Proxy URL (mtproto:// or socks5://) that overrides config",
     ),
     exclude: Optional[Path] = typer.Option(
         None,

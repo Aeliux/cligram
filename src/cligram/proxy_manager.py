@@ -1,15 +1,16 @@
 import asyncio
 import base64
+import logging
 import re
+import time
 from dataclasses import dataclass
 from enum import Enum
 from logging import Logger
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import socks
+from telethon import TelegramClient
 from telethon.network import ConnectionTcpMTProxyRandomizedIntermediate
-
-from .logger import get_logger
 
 
 class ProxyType(Enum):
@@ -34,6 +35,9 @@ class Proxy:
     authentication methods. For MTProto, requires secret key; for SOCKS5,
     supports optional username/password authentication.
     """
+
+    url: str
+    """Original proxy URL string"""
 
     type: ProxyType
     """Type of proxy protocol to use"""
@@ -101,16 +105,12 @@ class ProxyManager:
     def __init__(self):
         self.proxies: List[Proxy] = []
         self.current_proxy: Optional[Proxy] = None
-        self.logger = get_logger()
 
     proxies: List[Proxy]
     """List of configured proxy connections"""
 
     current_proxy: Optional[Proxy]
     """Currently selected working proxy"""
-
-    logger: Logger
-    """Logger instance for proxy operations"""
 
     def add_proxy(self, proxy_url: str) -> Optional[Proxy]:
         """
@@ -167,28 +167,34 @@ class ProxyManager:
             r"socks5://(?:([^:]+):([^@]+)@)?([^:]+):(\d+)", proxy_url
         )
 
-        try:
-            if mtproto_match:
-                secret, host, port = mtproto_match.groups()
-                return Proxy(
-                    ProxyType.MTPROTO, host, int(port), self._decode_secret(secret)
-                )
-            elif mtproto_tg_match:
-                host, port, secret = mtproto_tg_match.groups()
-                return Proxy(
-                    ProxyType.MTPROTO, host, int(port), self._decode_secret(secret)
-                )
-            elif socks5_match:
-                username, password, host, port = socks5_match.groups()
-                return Proxy(
-                    ProxyType.SOCKS5,
-                    host,
-                    int(port),
-                    username=username,
-                    password=password,
-                )
-        except Exception as e:
-            self.logger.error(f"Failed to parse proxy URL: {e}")
+        if mtproto_match:
+            secret, host, port = mtproto_match.groups()
+            return Proxy(
+                type=ProxyType.MTPROTO,
+                host=host,
+                port=int(port),
+                secret=self._decode_secret(secret),
+                url=proxy_url,
+            )
+        elif mtproto_tg_match:
+            host, port, secret = mtproto_tg_match.groups()
+            return Proxy(
+                type=ProxyType.MTPROTO,
+                host=host,
+                port=int(port),
+                secret=self._decode_secret(secret),
+                url=proxy_url,
+            )
+        elif socks5_match:
+            username, password, host, port = socks5_match.groups()
+            return Proxy(
+                type=ProxyType.SOCKS5,
+                host=host,
+                port=int(port),
+                username=username,
+                password=password,
+                url=proxy_url,
+            )
         return None
 
     async def test_proxies(
@@ -197,7 +203,7 @@ class ProxyManager:
         exclusion: List[Proxy] = [],
         shutdown_event: Optional[asyncio.Event] = None,
         timeout: float = 30.0,
-    ) -> Optional[Proxy]:
+    ) -> List[Proxy]:
         """
         Test proxies to find a working one.
 
@@ -217,19 +223,192 @@ class ProxyManager:
         ]
 
         if not candidates:
-            self.logger.warning("[PROXY] No proxies to test")
             return None
 
-        from .proxy_tester import test_proxies
-
         results = await test_proxies(
-            candidates, self.logger, timeout=timeout, shutdown_event=shutdown_event
+            candidates, timeout=timeout, shutdown_event=shutdown_event
         )
 
         # Return first working proxy
         for result in results:
             if result.success:
                 self.current_proxy = result.proxy
-                return result.proxy
 
-        return None
+        return results
+
+
+MT_PING_TAG = b"\xee\xee\xee\xee"
+
+
+@dataclass
+class ProxyTestResult:
+    """Result of a proxy test including latency and status."""
+
+    proxy: "Proxy"  # Forward reference
+    success: bool
+    latency: Optional[float] = None
+    error: Optional[str] = None
+
+    @property
+    def score(self) -> float:
+        """Calculate proxy score (lower is better)."""
+        if not self.success:
+            return float("inf")
+        return self.latency or float("inf")
+
+
+async def ping_mtproto(
+    proxy: "Proxy", timeout: float = 30.0
+) -> Tuple[bool, Optional[float], Optional[str]]:
+    """Test MTProto proxy using actual Telegram connection."""
+    start = time.time()
+
+    try:
+        # Create temporary client for testing
+        client = TelegramClient(
+            None,  # Memory session
+            1,  # Dummy API ID
+            "0" * 32,  # Dummy API hash
+            connection=ConnectionTcpMTProxyRandomizedIntermediate,
+            proxy=(proxy.host, proxy.port, proxy.secret),
+            timeout=timeout,
+            auto_reconnect=False,
+            connection_retries=1,
+            retry_delay=1,
+        )
+
+        # Test basic connection
+        await asyncio.wait_for(client.connect(), timeout)
+        success = True
+        error = None
+
+    except asyncio.TimeoutError:
+        success = False
+        error = "Connection timed out"
+    except ConnectionError as e:
+        if "Invalid DC" in str(e):
+            success = True
+            error = None
+        else:
+            success = False
+            error = str(e)
+    except Exception as e:
+        success = False
+        error = str(e)
+    finally:
+        try:
+            await client.disconnect()
+        except:
+            pass
+
+    latency = (time.time() - start) * 1000 if success else None
+    return success, latency, error
+
+
+async def ping_socks5(
+    proxy: "Proxy", timeout: float = 5.0
+) -> Tuple[bool, Optional[float], Optional[str]]:
+    """Test SOCKS5 proxy with timeout and error reporting."""
+    start = time.time()
+    try:
+        reader, writer = await asyncio.wait_for(
+            asyncio.open_connection(proxy.host, proxy.port), timeout
+        )
+        # Initial greeting
+        writer.write(b"\x05\x01\x00")
+        await writer.drain()
+        resp = await asyncio.wait_for(reader.readexactly(2), timeout)
+        if resp != b"\x05\x00":
+            return False, None, "SOCKS5 no-auth refused"
+
+        writer.write(b"\x05\x01\x00\x01\x00\x00\x00\x00\x00\x00")
+        await writer.drain()
+
+        header = await asyncio.wait_for(reader.readexactly(4), timeout)
+        if header[0] != 5 or header[1] != 0:
+            return False, None, f"SOCKS5 connect failed (REP={header[1]})"
+
+        # Clean up remaining data
+        atyp = header[3]
+        try:
+            if atyp == 1:
+                await reader.readexactly(4 + 2)
+            elif atyp == 3:
+                await reader.readexactly(ord(await reader.readexactly(1)) + 2)
+            elif atyp == 4:
+                await reader.readexactly(16 + 2)
+            else:
+                return False, None, f"Unknown address type: {atyp}"
+        except Exception:
+            pass  # Ignore errors in cleanup
+
+        writer.close()
+        try:
+            await writer.wait_closed()
+        except Exception:
+            pass  # Ignore close errors
+        return True, (time.time() - start) * 1000, None
+    except asyncio.TimeoutError:
+        return False, None, "Connection timed out"
+    except Exception as e:
+        return False, None, str(e)
+
+
+async def test_proxy(
+    proxy: "Proxy", timeout: float = 5.0, shutdown_event: Optional[asyncio.Event] = None
+) -> ProxyTestResult:
+    """Test a proxy with timeout and shutdown support."""
+    if shutdown_event and shutdown_event.is_set():
+        return ProxyTestResult(proxy, False, error="Test cancelled")
+
+    test_func = ping_mtproto if proxy.type == ProxyType.MTPROTO else ping_socks5
+    success, latency, error = await test_func(proxy, timeout)
+    return ProxyTestResult(proxy, success, latency, error)
+
+
+async def test_proxies(
+    proxies: List["Proxy"],
+    timeout: float = 30.0,
+    shutdown_event: Optional[asyncio.Event] = None,
+) -> List[ProxyTestResult]:
+    """Test multiple proxies concurrently and return sorted results."""
+    if not proxies:
+        return []
+
+    # Temporarily suppress Telethon logging
+    telethon_logger = logging.getLogger("telethon")
+    original_level = telethon_logger.level
+    telethon_logger.setLevel(logging.CRITICAL)
+
+    # Create tasks explicitly using asyncio.create_task
+    tasks = [
+        asyncio.create_task(test_proxy(p, timeout, shutdown_event)) for p in proxies
+    ]
+    results = []
+
+    try:
+        # Use as_completed to get results as they finish
+        for coro in asyncio.as_completed(tasks):
+            result = await coro
+            results.append(result)
+
+            if shutdown_event and shutdown_event.is_set():
+                break
+    except Exception:
+        pass
+    finally:
+        # Cancel any remaining tasks
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+
+    # Restore original logging level
+    telethon_logger.setLevel(original_level)
+
+    # Sort by score (successful proxies first, then by latency)
+    results.sort(key=lambda r: r.score)
+    return results
