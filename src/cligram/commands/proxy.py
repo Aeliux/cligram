@@ -19,10 +19,13 @@ def _get_proxy_title(proxy: Proxy, use_url) -> str:
     if use_url:
         return proxy.url
     else:
-        return f"[{proxy.type.value}] {proxy.host}:{proxy.port}"
+        return f"[{proxy.type.value}] {_get_proxy_host(proxy, use_url=False)}"
 
 
 def _get_proxy_host(proxy: Proxy, use_url: bool) -> str:
+    if proxy.is_direct and not proxy.url:
+        return "direct"
+
     if use_url:
         return proxy.url
     else:
@@ -49,20 +52,11 @@ async def run_tests(
         )
 
         con = Console()
-        table = Table(show_header=True)
-        table.add_column("#", justify="center", vertical="middle")
-        table.add_column("Type", justify="center", vertical="middle")
-        table.add_column(
-            "URL" if use_url else "Host", overflow="fold", vertical="middle"
-        )
+        table = create_console_table(con, use_url)
         table.add_column("Status", justify="center", vertical="middle", max_width=15)
 
         for i, result in enumerate(results):
-            status = (
-                f"{result.latency:.0f}ms"
-                if result.success
-                else f"Failed ({result.error})"
-            )
+            status = f"{result.latency:.0f}ms" if result.success else result.error
 
             style = Style(
                 color=(
@@ -84,6 +78,14 @@ async def run_tests(
         shutdown_event.set()
 
     return results
+
+
+def create_console_table(con: Console, use_url: bool):
+    table = Table(show_header=True)
+    table.add_column("#", justify="center", vertical="middle")
+    table.add_column("Type", justify="center", vertical="middle")
+    table.add_column("URL" if use_url else "Host", overflow="fold", vertical="middle")
+    return table
 
 
 @app.command("add")
@@ -147,8 +149,15 @@ def list_proxies(
         raise typer.Exit(code=1)
 
     typer.echo("Configured Proxies:")
-    for proxy in proxy_manager.proxies:
-        typer.echo(_get_proxy_title(proxy, use_url=show_url))
+    con = Console()
+    table = create_console_table(con, use_url=show_url)
+    for i, proxy in enumerate(proxy_manager.proxies):
+        table.add_row(
+            str(i + 1),
+            proxy.type.value,
+            _get_proxy_host(proxy, use_url=show_url),
+        )
+    con.print(table)
 
 
 @app.command("test")

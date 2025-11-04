@@ -128,10 +128,10 @@ class ProxyManager:
             ProxyManager instance
         """
         proxy_manager = cls()
-        for proxy in config.telegram.proxies:
-            proxy_manager.add_proxy(proxy)
         if config.telegram.direct_connection and not exclude_direct:
             proxy_manager.add_direct_proxy()
+        for proxy in config.telegram.proxies:
+            proxy_manager.add_proxy(proxy)
         return proxy_manager
 
     def __init__(self):
@@ -248,19 +248,8 @@ class ProxyManager:
         exclusion: List[Proxy] = [],
         shutdown_event: Optional[asyncio.Event] = None,
         timeout: float = 30.0,
-    ) -> List[Proxy]:
-        """
-        Test proxies to find a working one.
+    ) -> List["ProxyTestResult"]:
 
-        Args:
-            filter: Optional proxy type filter
-            exclusion: List of proxies to exclude
-            shutdown_event: Event to signal operation shutdown
-            timeout: Connection timeout in seconds
-
-        Returns:
-            The best working proxy or None if all fail
-        """
         candidates = [
             p
             for p in self.proxies

@@ -782,7 +782,7 @@ class TelegramScanner:
 
         except SessionNotFoundError as e:
             self.app.console.print(
-                "Session not found: ",
+                "Session not found:",
                 self.config.telegram.session,
                 style=Style(color="red"),
             )
