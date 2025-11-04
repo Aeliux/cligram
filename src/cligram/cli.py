@@ -34,13 +34,14 @@ def validate_config_path(value: Path) -> Path:
 
 
 app = typer.Typer(
-    help="Telegram message scanner and forwarder",
+    help="CLI based telegram client",
     add_completion=False,
 )
 
 app.add_typer(commands.config.app, name="config")
 app.add_typer(commands.session.app, name="session")
 app.add_typer(commands.proxy.app, name="proxy")
+app.add_typer(commands.interactive.app, name="interactive")
 
 
 @app.command()

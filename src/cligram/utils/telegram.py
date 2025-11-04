@@ -4,6 +4,7 @@ from typing import Optional
 
 from telethon import TelegramClient
 from telethon.tl.custom.dialog import Dialog
+from telethon.tl.types import Channel, Chat, User
 
 from ..config import Config
 from ..proxy_manager import Proxy
@@ -43,6 +44,23 @@ def get_session(config: Config, create: bool = False) -> CustomSession:
     return CustomSession(session_id=config.telegram.session, create=create)
 
 
+def get_entity_name(
+    entity: User | Chat | Channel,
+):
+    """Get the display name of a Telegram entity."""
+    if hasattr(entity, "first_name") and entity.first_name:
+        name = entity.first_name
+        if hasattr(entity, "last_name") and entity.last_name:
+            name += f" {entity.last_name}"
+        return name.strip()
+    elif hasattr(entity, "title") and entity.title:
+        return entity.title
+    elif hasattr(entity, "username") and entity.username:
+        return f"@{entity.username}"
+    else:
+        return "Unknown"
+
+
 def _is_dialog_muted(dialog: Dialog) -> bool:
     try:
         if not dialog.dialog.notify_settings.mute_until:
@@ -50,7 +68,7 @@ def _is_dialog_muted(dialog: Dialog) -> bool:
 
         return (
             dialog.dialog.notify_settings.mute_until.timestamp()
-            > datetime.now().timestamp()
+            > datetime.datetime.now().timestamp()
         )
     except Exception:
         return False
