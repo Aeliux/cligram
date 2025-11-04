@@ -41,7 +41,6 @@ app = typer.Typer(
 app.add_typer(commands.config.app, name="config")
 app.add_typer(commands.session.app, name="session")
 app.add_typer(commands.proxy.app, name="proxy")
-app.add_typer(commands.interactive.app, name="interactive")
 
 
 @app.command()
@@ -85,6 +84,49 @@ def run(
         config.exclusions = json.load(exclude.open("r"))
     app = Application(config=config)
     app.start()
+
+
+@app.command("interactive")
+def interactive(
+    ctx: typer.Context,
+    session: Optional[str] = typer.Option(
+        None,
+        "-s",
+        "--session",
+        help="Session name for authentication",
+    ),
+):
+    """Run the application in interactive mode."""
+    from .tasks import interactive
+
+    config: Config = ctx.obj["g_load_config"]()
+    if session:
+        config.telegram.session = session
+
+    app: Application = ctx.obj["g_load_app"]()
+    app.start(interactive.main)
+
+
+@app.command("test")
+def test_command(
+    ctx: typer.Context,
+):
+    """Development test command."""
+    from rich.box import SIMPLE
+    from rich.columns import Columns
+    from rich.console import Console
+    from rich.layout import Layout
+    from rich.panel import Panel
+    from rich.table import Table
+
+    console = Console()
+
+    table = Table.grid(padding=(1, 5))
+    table.add_column(style="cyan")
+    table.add_column(style="magenta")
+    table.add_row("Item 1", "This is the first item.")
+    table.add_row("Item 2sssssssssss", "This is the second item.")
+    console.print(table)
 
 
 @app.callback()

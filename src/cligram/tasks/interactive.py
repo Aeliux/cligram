@@ -1,12 +1,13 @@
 import asyncio
 import logging
 import sys
-from typing import Optional
+from dataclasses import dataclass
+from typing import Awaitable, Callable, List, Optional
 
-from rich import get_console
 from rich.console import Console
+from rich.table import Table
 from telethon import TelegramClient, events, functions, hints
-from telethon.tl.types import Message
+from telethon.tl.types import Channel, Chat, Message, User, Username
 
 from .. import Application, utils
 from . import telegram
@@ -66,6 +67,108 @@ class InputHandler:
                 self.console.print(f"> {self.current_input}", end="", highlight=False)
 
 
+@dataclass
+class Command:
+    name: str
+    """The name of the command."""
+
+    description: str
+    """The description of the command."""
+
+    handler: Callable[["CommandHandler", List[str]], Awaitable[None]]
+    """The function that handles the command."""
+
+
+class CommandHandler:
+    """Handle user commands in interactive mode."""
+
+    def __init__(self, app: Application, client: TelegramClient):
+        self.app = app
+        self.client = client
+        self.commands: dict[str, Command] = {}
+
+        self.commands["resolve"] = Command(
+            name="resolve",
+            description="Resolve a Telegram entity by username or ID, with optional flags -a/--all for full data",
+            handler=self.cmd_resolve,
+        )
+
+    async def handle_command(self, command: str):
+        """Handle user commands."""
+        parts = command.split(" ")
+        cmd = parts[0]
+        args = parts[1:]
+        if cmd == "help":
+            self.app.console.print("[bold]Available Commands:[/bold]")
+            table = Table.grid(padding=(0, 5))
+            table.add_column("Command")
+            table.add_column("Description")
+
+            for command in self.commands.values():
+                table.add_row(f"[bold]{command.name}[/bold]", command.description)
+            self.app.console.print(table)
+        elif cmd in self.commands:
+            command_obj = self.commands[cmd]
+            await command_obj.handler(self, args)
+        else:
+            self.app.console.print(f"[dim]Unknown command: {command}[/dim]")
+
+    async def get_entity(self, entity: hints.EntitiesLike):
+        """Get entity."""
+        entity: hints.Entity = await self.client.get_entity(entity)
+        return entity
+
+    async def cmd_resolve(self, _, args: List[str]):
+        """Handler for resolve command."""
+        if not args:
+            self.app.console.print("[red]Usage: resolve <entity_name>[/red]")
+            return
+
+        # detect and remove flags from args
+        flags = [arg for arg in args if arg.startswith("-")]
+        args = [arg for arg in args if not arg.startswith("-")]
+
+        extend = "-a" in flags or "--all" in flags
+
+        entity_name = args[0]
+        try:
+            entity = await self.get_entity(entity_name)
+            self.app.console.print(f"[green]Entity resolved:[/green] {entity.id}")
+            table = Table.grid(padding=(0, 5))
+            table.add_column("Field")
+            table.add_column("Value")
+
+            # Show additional info about this entity
+            table.add_row("Type", entity.__class__.__name__)
+            table.add_row("Name", utils.get_entity_name(entity))
+            table.add_row("Has Profile Photo", utils.telegram.has_profile_photo(entity))
+
+            username = getattr(entity, "username", None)
+            usernames: List[Username] = getattr(entity, "usernames", None)
+            if username:
+                table.add_row("Username", username)
+            elif usernames:
+                table.add_row("Usernames", "\n".join([u.username for u in usernames]))
+            if isinstance(entity, User):
+                table.add_row("Phone", _tryattr(entity, "phone"))
+                table.add_row("Status", utils.get_status(entity))
+                table.add_row("Is Bot", _tryattr(entity, "bot"))
+            table.add_row("Is Verified", _tryattr(entity, "verified"))
+            table.add_row("Is Scam", _tryattr(entity, "scam"))
+            table.add_row("Is Restricted", _tryattr(entity, "restricted"))
+            if extend:
+                table.add_row("Full Data", entity.stringify())
+            self.app.console.print(table)
+
+        except Exception as e:
+            self.app.console.print(f"[red]Error resolving entity:[/red] {e}")
+
+
+def _tryattr(obj, attr: str):
+    value = getattr(obj, attr, None)
+    return str(value) if value is not None else "N/A"
+
+
 async def main(
     app: Application,
     shutdown_event: asyncio.Event,
@@ -85,10 +188,35 @@ async def interactive_callback(
     """Callback for interactive task."""
     app.status.stop()
     app.console.print("[green]Interactive session started![/green]")
-    app.console.print("[dim]Type help for commands, quit to exit[/dim]")
+    app.console.print("[dim]Type help for commands, CTRL+C to exit[/dim]")
 
     input_handler = InputHandler(app.console)
     await input_handler.start()
+
+    command_handler = CommandHandler(app, client)
+
+    # Input processing loop
+    async def process_input():
+        app.console.print("> ", end="", highlight=False)
+        while not shutdown_event.is_set():
+            try:
+                line = await asyncio.wait_for(input_handler.read_input(), timeout=1.0)
+                input_handler.current_input = ""
+
+                if line.strip():
+                    await command_handler.handle_command(line.strip())
+
+                # Print new prompt after command is handled
+                app.console.print("> ", end="", highlight=False)
+
+            except asyncio.TimeoutError:
+                continue
+            except Exception as e:
+                app.console.print(f"[red]Error processing input:[/red] {e}")
+                logger.error(f"Error processing input: {e}")
+
+    # Start input processing
+    input_task = asyncio.create_task(process_input())
 
     @client.on(events.NewMessage)
     async def handler(event: events.NewMessage.Event):
@@ -108,28 +236,6 @@ async def interactive_callback(
             functions.messages.ReadHistoryRequest(peer=msg.peer_id, max_id=msg.id)
         )
 
-    # Input processing loop
-    async def process_input():
-        app.console.print("> ", end="", highlight=False)
-        while not shutdown_event.is_set():
-            try:
-                line = await asyncio.wait_for(input_handler.read_input(), timeout=1.0)
-                input_handler.current_input = ""
-
-                if line.strip():
-                    await handle_command(app, client, line.strip())
-
-                # Print new prompt after command is handled
-                app.console.print("> ", end="", highlight=False)
-
-            except asyncio.TimeoutError:
-                continue
-            except Exception as e:
-                logger.error(f"Error processing input: {e}")
-
-    # Start input processing
-    input_task = asyncio.create_task(process_input())
-
     # Wait for shutdown event
     await shutdown_event.wait()
 
@@ -144,19 +250,6 @@ async def interactive_callback(
     client.remove_event_handler(handler)
 
     app.status.start()
-
-
-async def handle_command(app: Application, client: TelegramClient, command: str):
-    """Handle user commands."""
-    if command == "quit":
-        app.console.print("[yellow]Shutting down...[/yellow]")
-        app.shutdown_event.set()
-    elif command == "help":
-        app.console.print("[bold]Available commands:[/bold]")
-        app.console.print("  help  - Show this help message")
-        app.console.print("  quit  - Exit the application")
-    else:
-        app.console.print(f"[dim]Unknown command: {command}[/dim]")
 
 
 async def print_event(
