@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional, Set
 from telethon.sessions import SQLiteSession
 
 from .config import Config
+from .exceptions import SessionMismatchError
 
 
 def get_search_paths(config: Optional[Config] = None) -> List[Path]:
@@ -70,6 +71,16 @@ class CustomSession(SQLiteSession):
 
             super().__init__(str(found_path))
         self._initialize_metadata_table()
+
+        config = Config.get_config()
+        api_id = config.telegram.api.identifier
+        session_api_id = self.get_metadata("api_id")
+        if session_api_id is None:
+            self.set_metadata("api_id", str(api_id))
+        elif session_api_id != api_id:
+            raise SessionMismatchError(
+                "The session was created with a different API ID."
+            )
 
     def _initialize_metadata_table(self):
         """Create metadata table if it doesn't exist."""
