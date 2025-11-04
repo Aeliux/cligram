@@ -3,10 +3,10 @@ import time
 from pathlib import Path
 from typing import List, Optional
 
-import rich.status
 import typer
 
 from . import commands
+from .app import Application
 from .config import Config, WorkMode, find_config_file
 from .logger import setup_logger
 
@@ -69,8 +69,6 @@ def run(
     ),
 ):
     """Telegram message scanner and forwarder."""
-    from .app import Application
-
     config: Config = ctx.obj["g_load_config"]()
     if test:
         config.scan.test = True
@@ -112,8 +110,12 @@ def callback(
     """
     ctx.obj = {}
 
-    def do_load() -> Config:
+    def setup() -> Config:
         nonlocal config, verbose, overrides
+
+        if Config.get_config(raise_if_failed=False) is not None:
+            return Config.get_config()
+
         config = config or find_config_file(raise_error=True)
         loaded_config = Config.from_file(config, overrides=overrides)
         if verbose:
@@ -128,35 +130,15 @@ def callback(
 
         return loaded_config
 
-    ctx.obj["g_load_config"] = do_load
+    ctx.obj["g_load_config"] = setup
 
+    def load_app() -> Application:
+        from .app import Application
 
-@app.command("test")
-def test_command(
-    ctx: typer.Context,
-):
-    """
-    Development test command.
-    """
-    import time
+        cfg = ctx.obj["g_load_config"]()
+        return Application(config=cfg)
 
-    from rich import get_console
-    from rich.progress import Progress
-    from rich.status import Status
-
-    prog = Progress()
-    task = prog.add_task("Loading configuration...")
-    with prog:
-        while not prog.finished:
-            prog.update(task, advance=0.5)
-            time.sleep(0.1)
-
-    with Status("Testing...", spinner="dots") as status:
-        status.update("Loading configuration...")
-        time.sleep(3)  # Simulate some work
-        get_console().print("Configuration loaded.")
-        status.update("Performing tests...")
-        time.sleep(5)  # Simulate some more work
+    ctx.obj["g_load_app"] = load_app
 
 
 def main():

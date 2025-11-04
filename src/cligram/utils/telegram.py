@@ -1,7 +1,9 @@
+import datetime
 from platform import node, release, system
 from typing import Optional
 
 from telethon import TelegramClient
+from telethon.tl.custom.dialog import Dialog
 
 from ..config import Config
 from ..proxy_manager import Proxy
@@ -39,3 +41,16 @@ def get_session(config: Config, create: bool = False) -> CustomSession:
     Load a CustomSession based on the configuration.
     """
     return CustomSession(session_id=config.telegram.session, create=create)
+
+
+def _is_dialog_muted(dialog: Dialog) -> bool:
+    try:
+        if not dialog.dialog.notify_settings.mute_until:
+            return False
+
+        return (
+            dialog.dialog.notify_settings.mute_until.timestamp()
+            > datetime.now().timestamp()
+        )
+    except Exception:
+        return False

@@ -2,7 +2,7 @@ import asyncio
 import logging
 import platform
 import signal
-from typing import Optional
+from typing import Callable, Optional
 
 from rich import get_console
 from rich.status import Status
@@ -42,7 +42,6 @@ class Application:
         self.state = StateManager(data_dir=self.config.data_path)
         """"State manager for application state persistence."""
 
-        self.scanner = None
         self.shutdown_event: Optional[asyncio.Event] = None
         """Event to signal application shutdown."""
 
@@ -56,13 +55,14 @@ class Application:
         Handle graceful application shutdown.
 
         Args:
-            signal_: Signal that triggered shutdown (SIGTERM/SIGINT)
+            sig: Signal that triggered shutdown (SIGTERM/SIGINT)
 
         Sets shutdown event and allows running operations to complete
         cleanly before terminating.
         """
         if sig:
             logger.warning(f"Received exit signal {sig}")
+            self.console.print(f"[bold red]Received exit signal {sig}[/bold red]")
         if self.shutdown_event:
             self.shutdown_event.set()
 
@@ -95,20 +95,15 @@ class Application:
                 except NotImplementedError:
                     logger.warning(f"Failed to set handler for signal {sig}")
 
-    def log_progress(self):
+    async def run(self, task: Callable[["Application", asyncio.Event], asyncio.Future]):
         """
-        Log current application state progress.
-        """
-        logger.info(f"Total Eligible users: {len(self.state.users.eligible)}")
-        logger.info(f"Total Messaged users: {len(self.state.users.messaged)}")
-
-    async def run(self):
-        """
-        Main application execution method.
+        Initialize application and run task.
         """
         from . import __version__
 
         global app_instance
+        if app_instance is not None:
+            raise RuntimeError("Application instance is already running")
         app_instance = self
 
         self.shutdown_event = asyncio.Event()
@@ -131,35 +126,37 @@ class Application:
 
         self.status.update("Loading state...")
         self.state.load()
-        self.log_progress()
 
         try:
-            from .scanner import TelegramScanner
-
-            self.status.update("Running scanner...")
-            self.scanner = TelegramScanner(self)
-            await self.scanner.run(self.shutdown_event)
+            self.status.update("Running task...")
+            await task(self, self.shutdown_event)
             logger.info("Execution completed successfully")
         except Exception as e:
             logger.error(f"Error during execution: {e}")
             raise
         finally:
             self.status.update("Shutting down...")
-            self.log_progress()
             await self.state.save()
             await self.state.backup()
-            logger.info("[APP] Shutdown complete")
+            logger.info("Shutdown complete")
             self.status.stop()
+            app_instance = None
 
-    def start(self):
+    def start(self, task: Callable[["Application", asyncio.Event], asyncio.Future]):
         """
-        Application entry point.
+        Start the application event loop and run the specified task.
 
-        Wraps async run() method in synchronous interface.
-        Handles keyboard interrupts and unexpected errors.
+        Args:
+            task (Callable): Async function representing the main task to run
         """
+        if app_instance is not None:
+            raise RuntimeError("Application instance is already running")
+
+        if not callable(task):
+            raise ValueError("Task must be a callable async function")
+
         try:
-            asyncio.run(self.run())
+            asyncio.run(self.run(task))
         except asyncio.CancelledError:
             logger.warning("Cancellation requested by user")
         except KeyboardInterrupt:
