@@ -346,7 +346,7 @@ async def ping_socks5(
             pass  # Ignore close errors
         return True, (time.time() - start) * 1000, None
     except asyncio.TimeoutError:
-        return False, None, "Connection timed out"
+        return False, None, "timed out"
     except Exception as e:
         return False, None, str(e)
 
@@ -394,7 +394,7 @@ async def _test_telegram_connection(
 
     except asyncio.TimeoutError:
         success = False
-        error = "Connection timed out"
+        error = "timed out"
     except ConnectionError as e:
         if "Invalid DC" in str(e):
             success = True
