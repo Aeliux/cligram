@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import platform
 import signal
 import time
@@ -41,12 +42,14 @@ class Application:
         self.config = config
         # Initialize global logger with config
         global logger
-        logger = setup_logger(
+        setup_logger(
             verbose=self.config.app.verbose,
             log_file=self.config.data_path
             / "logs"
             / time.strftime("%Y-%m-%d.log", time.localtime()),
         )
+
+        logger = logging.getLogger("cligram.app")
 
         self.state = StateManager(
             data_dir=self.config.data_path,

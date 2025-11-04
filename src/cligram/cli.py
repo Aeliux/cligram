@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 from typing import List, Optional
 
+import rich.status
 import typer
 
 from . import commands
@@ -119,6 +120,34 @@ def callback(
         return loaded_config
 
     ctx.obj["g_load_config"] = do_load
+
+
+@app.command("test")
+def test_command(
+    ctx: typer.Context,
+):
+    """
+    Development test command.
+    """
+    import time
+
+    from rich import get_console
+    from rich.progress import Progress
+    from rich.status import Status
+
+    prog = Progress()
+    task = prog.add_task("Loading configuration...")
+    with prog:
+        while not prog.finished:
+            prog.update(task, advance=0.5)
+            time.sleep(0.1)
+
+    with Status("Testing...", spinner="dots") as status:
+        status.update("Loading configuration...")
+        time.sleep(3)  # Simulate some work
+        get_console().print("Configuration loaded.")
+        status.update("Performing tests...")
+        time.sleep(5)  # Simulate some more work
 
 
 def main():

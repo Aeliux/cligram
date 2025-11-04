@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import random
 import time
 from datetime import datetime
@@ -11,7 +12,6 @@ from telethon.tl.types import ChannelParticipantsAdmins, Message, MessageService
 
 from . import utils
 from .config import Config, WorkMode
-from .logger import get_logger
 from .proxy_manager import ProxyManager
 from .session import CustomSession
 from .state_manager import StateManager
@@ -38,10 +38,8 @@ class TelegramScanner:
             config: Application configuration instance
             state_manager: State management instance for persistence
         """
-        from . import __version__
-
         global logger
-        logger = get_logger()
+        logger = logging.getLogger("cligram.scanner")
 
         self.config: Config = config
         self.state: StateManager = state_manager

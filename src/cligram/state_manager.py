@@ -2,6 +2,7 @@ import asyncio
 import copy
 import hashlib
 import json
+import logging
 import os
 import shutil
 from abc import ABC, abstractmethod
@@ -10,8 +11,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional, Set
-
-from .logger import get_logger
 
 logger = None  # Will be initialized later
 
@@ -385,7 +384,7 @@ class StateManager:
             data_dir (str): Path to the data directory storing all state files
         """
         global logger
-        logger = get_logger()  # Get logger after Application initialization
+        logger = logging.getLogger("cligram.state_manager")
 
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
