@@ -26,7 +26,7 @@ class CustomSession(SQLiteSession):
     Custom Telethon SQLite session with metadata storage and multi-directory search.
     """
 
-    def __init__(self, session_id: Optional[str] = None):
+    def __init__(self, session_id: Optional[str] = None, create: bool = False):
         """
         Initialize custom session.
 
@@ -46,6 +46,8 @@ class CustomSession(SQLiteSession):
             or os.path.sep in session_id
             or "/" in session_id
         ):
+            if not session_path.exists() and not create:
+                raise FileNotFoundError(f"Session file not found: {session_path}")
             super().__init__(str(session_path))
         else:
             # Search in provided paths
@@ -59,6 +61,9 @@ class CustomSession(SQLiteSession):
 
             # If not found, create in last path
             if found_path is None:
+                if not create:
+                    raise FileNotFoundError(f"Session file not found: {session_id}")
+
                 last_dir = search_paths[-1]
                 last_dir.mkdir(parents=True, exist_ok=True)
                 found_path = last_dir / f"{session_id}.session"

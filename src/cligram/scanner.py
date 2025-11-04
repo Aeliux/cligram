@@ -9,6 +9,7 @@ from telethon import TelegramClient, errors, events, functions
 from telethon.tl.custom.dialog import Dialog
 from telethon.tl.types import ChannelParticipantsAdmins, Message, MessageService, User
 
+from . import utils
 from .config import Config, WorkMode
 from .logger import get_logger
 from .proxy_manager import ProxyManager
@@ -60,18 +61,6 @@ class TelegramScanner:
 
         self._cached_ids: Dict[str, str] = {}
         self._entity_cache: Dict[str, User] = {}
-
-        self.client_params = {
-            "session": CustomSession(self.config.telegram.session),
-            "api_id": self.config.telegram.api.id,  # API ID from my.telegram.org
-            "api_hash": self.config.telegram.api.hash,  # API hash from my.telegram.org
-            "connection_retries": 2,  # Number of attempts before failing
-            "device_model": f"{node()}",  # Real device model
-            "system_version": f"{system()} {release()}",  # Real system details
-            "app_version": f"cligram v{__version__}",  # Package version
-            "lang_code": "en",  # Language to use for Telegram
-            "timeout": 10,  # Timeout in seconds for requests
-        }
 
     def _get_random_threshold(self, type_: str) -> int:
         """
@@ -672,13 +661,12 @@ class TelegramScanner:
         """
         try:
             # Test proxies and get working one
+            logger.info("[APP] Testing connections")
             await self.proxy_manager.test_proxies(shutdown_event=shutdown_event)
             working_connection = self.proxy_manager.current_proxy
 
             if shutdown_event.is_set():
                 return
-
-            final_params = self.client_params.copy()
 
             if working_connection:
                 if working_connection.is_direct:
@@ -687,13 +675,12 @@ class TelegramScanner:
                     logger.info(
                         f"[PROXY] Using proxy: [{working_connection.type.name}] {working_connection.host}:{working_connection.port}"
                     )
-                final_params.update(working_connection.export())
             else:
                 logger.error("[APP] No working connection available, aborting")
                 return
 
-            # Create actual client with working proxy
-            client: TelegramClient = TelegramClient(**final_params)
+            # Create actual client with working connection
+            client: TelegramClient = utils.get_client(self.config, working_connection)
             logger.info(f"[APP] Logging in with {client.session.filename} session")
 
             # Continue with client operations
@@ -841,16 +828,3 @@ class TelegramScanner:
 
     _entity_cache: Dict[str, User]
     """Cache of resolved usernames to User entities"""
-
-    client_params: Dict[str, Any]
-    """Telegram client initialization parameters:
-    - session: Session name for auth persistence
-    - api_id: Telegram API ID
-    - api_hash: Telegram API hash
-    - connection_retries: Number of connection attempts
-    - device_model: Client device model
-    - system_version: Client OS version
-    - app_version: Application version
-    - lang_code: Interface language
-    - timeout: Request timeout in seconds
-    """

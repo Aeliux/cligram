@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from typing import List, Optional
 
@@ -49,11 +50,6 @@ def run(
     rapid_save: bool = typer.Option(
         False, "--rapid-save", help="Enable rapid state saving to disk"
     ),
-    query: Optional[str] = typer.Option(
-        None,
-        "--query",
-        help="Query a config value using dot notation (e.g., app.verbose)",
-    ),
     mode: WorkMode = typer.Option(
         WorkMode.FULL.value, "-m", "--mode", help="Operation mode"
     ),
@@ -71,14 +67,22 @@ def run(
     ),
 ):
     """Telegram message scanner and forwarder."""
-
-    if query:
-        result = config.get_nested_value(query)
-        typer.echo(f"{query}={result}")
-        raise typer.Exit()
     from .app import Application
 
-    app = Application(config=config, **args)
+    config: Config = ctx.obj["g_load_config"]()
+    if test:
+        config.scan.test = True
+    if rapid_save:
+        config.app.rapid_save = True
+    if mode:
+        config.app.mode = mode
+    if session:
+        config.telegram.session = session
+    if limit is not None:
+        config.scan.limit = limit
+    if exclude:
+        config.exclusions = json.load(exclude.open("r"))
+    app = Application(config=config)
     app.start()
 
 

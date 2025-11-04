@@ -24,7 +24,7 @@ class Application:
     - Manage application lifecycle
     """
 
-    def __init__(self, config: Config, **kwargs):
+    def __init__(self, config: Config):
         """
         Initialize application components.
 
