@@ -113,9 +113,14 @@ class CommandHandler:
         else:
             self.app.console.print(f"[dim]Unknown command: {command}[/dim]")
 
-    async def get_entity(self, entity: hints.EntitiesLike):
+    async def get_entity(self, query: hints.EntitiesLike):
         """Get entity."""
-        entity: hints.Entity = await self.client.get_entity(entity)
+        try:
+            query = int(query)
+        except ValueError:
+            pass
+
+        entity: hints.Entity = await self.client.get_entity(query)
         return entity
 
     async def cmd_resolve(self, _, args: List[str]):
@@ -141,7 +146,9 @@ class CommandHandler:
             # Show additional info about this entity
             table.add_row("Type", entity.__class__.__name__)
             table.add_row("Name", utils.get_entity_name(entity))
-            table.add_row("Has Profile Photo", utils.telegram.has_profile_photo(entity))
+            table.add_row(
+                "Has Profile Photo", str(utils.telegram.has_profile_photo(entity))
+            )
 
             username = getattr(entity, "username", None)
             usernames: List[Username] = getattr(entity, "usernames", None)
