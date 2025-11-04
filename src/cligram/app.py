@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Optional
 
 from .config import Config, WorkMode
-from .logger import setup_logger
 from .scanner import TelegramScanner
 from .state_manager import StateManager
 
@@ -42,13 +41,6 @@ class Application:
         self.config = config
         # Initialize global logger with config
         global logger
-        setup_logger(
-            verbose=self.config.app.verbose,
-            log_file=self.config.data_path
-            / "logs"
-            / time.strftime("%Y-%m-%d.log", time.localtime()),
-        )
-
         logger = logging.getLogger("cligram.app")
 
         self.state = StateManager(

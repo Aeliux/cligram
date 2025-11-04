@@ -1,4 +1,5 @@
 import json
+import time
 from pathlib import Path
 from typing import List, Optional
 
@@ -7,7 +8,7 @@ import typer
 
 from . import commands
 from .config import Config, WorkMode, find_config_file
-from .session import CustomSession
+from .logger import setup_logger
 
 
 def validate_config_path(value: Path) -> Path:
@@ -117,6 +118,14 @@ def callback(
         loaded_config = Config.from_file(config, overrides=overrides)
         if verbose:
             loaded_config.app.verbose = True
+
+        setup_logger(
+            verbose=loaded_config.app.verbose,
+            log_file=loaded_config.base_path
+            / "logs"
+            / time.strftime("%Y-%m-%d.log", time.localtime()),
+        )
+
         return loaded_config
 
     ctx.obj["g_load_config"] = do_load
