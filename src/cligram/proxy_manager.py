@@ -20,10 +20,12 @@ class ProxyType(Enum):
     Variants:
         MTPROTO: Telegram's native MTProto proxy protocol
         SOCKS5: SOCKS5 proxy protocol with optional authentication
+        DIRECT: Direct connection without proxy
     """
 
     MTPROTO = "mtproto"
     SOCKS5 = "socks5"
+    DIRECT = "direct"
 
 
 @dataclass
@@ -81,15 +83,6 @@ class Proxy:
 
         return params
 
-    def to_dict(self):
-        base = {"type": self.type.value, "host": self.host, "port": self.port}
-        if self.type == ProxyType.MTPROTO and self.secret:
-            base["secret"] = self.secret
-        elif self.type == ProxyType.SOCKS5 and self.username and self.password:
-            base["username"] = self.username
-            base["password"] = self.password
-        return base
-
 
 class ProxyManager:
     """
@@ -126,6 +119,19 @@ class ProxyManager:
         if proxy and proxy not in self.proxies:
             self.proxies.append(proxy)
         return proxy
+
+    def add_direct_proxy(self):
+        """
+        Add direct connection (no proxy) to the manager.
+        """
+        direct_proxy = Proxy(
+            url="",
+            type=ProxyType.DIRECT,
+            host="",
+            port=0,
+        )
+        if direct_proxy not in self.proxies:
+            self.proxies.append(direct_proxy)
 
     def _decode_secret(self, secret: str) -> str:
         """
