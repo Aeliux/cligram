@@ -2,53 +2,54 @@ import asyncio
 import logging
 import platform
 import signal
-import time
-from pathlib import Path
 from typing import Optional
 
+from rich import get_console
+from rich.status import Status
+
 from .config import Config, WorkMode
-from .scanner import TelegramScanner
 from .state_manager import StateManager
 
 logger = None  # Global logger instance
 
+app_instance: Optional["Application"] = None
+
+
+def get_app() -> "Application":
+    """
+    Retrieve the global application instance.
+
+    Returns:
+        Application: The global application instance
+
+    Raises:
+        RuntimeError: If application is not initialized
+    """
+    global app_instance
+    if app_instance is None:
+        raise RuntimeError("Application instance is not initialized")
+    return app_instance
+
 
 class Application:
-    """
-    Core application orchestrator.
-
-    Responsibilities:
-    - Load and manage configuration
-    - Initialize and coordinate components
-    - Handle shutdown and cleanup
-    - Manage application lifecycle
-    """
-
     def __init__(self, config: Config):
-        """
-        Initialize application components.
-
-        Args:
-            config: Loaded configuration object
-            **kwargs: CLI argument overrides including:
-                - verbose: Enable debug logging
-                - test: Enable test mode
-                - mode: Operation mode
-                - session: Session name
-                - proxy: Override proxy URL
-                - exclude: Path to exclusions file
-        """
-        self.config = config
-        # Initialize global logger with config
         global logger
+
+        self.config = config
+
         logger = logging.getLogger("cligram.app")
 
-        self.state = StateManager(
-            data_dir=self.config.data_path,
-            backup_dir=self.config.data_path / "backup",
-        )
-        self.scanner = TelegramScanner(self.config, self.state)
-        self._shutdown_event: Optional[asyncio.Event] = None
+        self.state = StateManager(data_dir=self.config.data_path)
+        """"State manager for application state persistence."""
+
+        self.scanner = None
+        self.shutdown_event: Optional[asyncio.Event] = None
+        """Event to signal application shutdown."""
+
+        self.console = get_console()
+        """Rich console for formatted output."""
+        self.status: Optional[Status] = None
+        """Rich status indicator for CLI feedback."""
 
     async def shutdown(self, sig=None):
         """
@@ -61,20 +62,9 @@ class Application:
         cleanly before terminating.
         """
         if sig:
-            logger.warning(f"[APP] Received exit signal {sig}")
-        if self._shutdown_event:
-            self._shutdown_event.set()
-
-        if False:
-            # Cancel all running tasks except the current one
-            tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
-            logger.warning(f"[APP] Cancelling {len(tasks)} running tasks")
-
-            for task in tasks:
-                task.cancel()
-
-            # Wait for all tasks to complete cancellation
-            await asyncio.gather(*tasks, return_exceptions=True)
+            logger.warning(f"Received exit signal {sig}")
+        if self.shutdown_event:
+            self.shutdown_event.set()
 
     async def setup_signal_handlers(self):
         """
@@ -95,7 +85,7 @@ class Application:
                     signal.SIGTERM, lambda s, f: asyncio.create_task(self.shutdown(s))
                 )
             except (AttributeError, NotImplementedError):
-                logger.warning("[APP] Signal handlers not fully supported on Windows")
+                logger.warning("Signal handlers not fully supported on Windows")
         else:
             for sig in (signal.SIGTERM, signal.SIGINT):
                 try:
@@ -103,52 +93,63 @@ class Application:
                         sig, lambda s=sig: asyncio.create_task(self.shutdown(s))
                     )
                 except NotImplementedError:
-                    logger.warning(f"[APP] Failed to set handler for signal {sig}")
+                    logger.warning(f"Failed to set handler for signal {sig}")
 
     def log_progress(self):
         """
         Log current application state progress.
         """
-        logger.info(f"[INFO] Total Eligible users: {len(self.state.users.eligible)}")
-        logger.info(f"[INFO] Total Messaged users: {len(self.state.users.messaged)}")
+        logger.info(f"Total Eligible users: {len(self.state.users.eligible)}")
+        logger.info(f"Total Messaged users: {len(self.state.users.messaged)}")
 
     async def run(self):
         """
-        Execute main application loop.
-
-        Flow:
-        1. Initialize shutdown event
-        2. Setup signal handlers
-        3. Load application state
-        4. Run scanner in configured mode
-        5. Handle cleanup on completion
+        Main application execution method.
         """
-        self._shutdown_event = asyncio.Event()
+        from . import __version__
 
-        logger.info(f"[APP] Starting application in {self.config.app.mode.value} mode")
-        if self.config.app.verbose:
-            logger.debug("[APP] Debug logging enabled")
-            logger.debug(f"[APP] Loaded configuration: {self.config.path}")
+        global app_instance
+        app_instance = self
 
-        if self.config.updated:
-            logger.warning("[APP] Configuration updated with new fields")
+        self.shutdown_event = asyncio.Event()
+        self.status = Status(
+            "Starting application...", console=self.console, spinner="dots"
+        )
+        self.status.start()
 
+        self.console.print(f"[bold green]cligram v{__version__}[/bold green]")
+        logger.info(f"Starting application in {self.config.app.mode.value} mode")
+
+        self.status.update("Initializing...")
         # Setup platform-specific signal handlers
         await self.setup_signal_handlers()
+
+        logger.debug(f"Loaded configuration: {self.config.path}")
+
+        if self.config.updated:
+            logger.warning("Configuration updated with new fields")
+
+        self.status.update("Loading state...")
         self.state.load()
         self.log_progress()
 
         try:
-            await self.scanner.run(self._shutdown_event)
-            logger.info("[APP] Execution completed successfully")
+            from .scanner import TelegramScanner
+
+            self.status.update("Running scanner...")
+            self.scanner = TelegramScanner(self)
+            await self.scanner.run(self.shutdown_event)
+            logger.info("Execution completed successfully")
         except Exception as e:
-            logger.error(f"[APP] Error during execution: {e}")
+            logger.error(f"Error during execution: {e}")
             raise
         finally:
+            self.status.update("Shutting down...")
             self.log_progress()
             await self.state.save()
             await self.state.backup()
             logger.info("[APP] Shutdown complete")
+            self.status.stop()
 
     def start(self):
         """
@@ -160,9 +161,9 @@ class Application:
         try:
             asyncio.run(self.run())
         except asyncio.CancelledError:
-            logger.warning("[APP] Cancellation requested by user")
+            logger.warning("Cancellation requested by user")
         except KeyboardInterrupt:
-            logger.warning("[APP] Interrupted by user")
+            logger.warning("Interrupted by user")
         except Exception as e:
-            logger.error(f"[APP] Fatal error: {e}")
+            logger.error(f"Fatal error: {e}")
             raise

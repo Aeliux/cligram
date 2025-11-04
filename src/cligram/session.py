@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional, Set
 from telethon.sessions import SQLiteSession
 
 from .config import Config
-from .exceptions import SessionMismatchError
+from .exceptions import SessionMismatchError, SessionNotFoundError
 
 
 def get_search_paths(config: Optional[Config] = None) -> List[Path]:
@@ -48,7 +48,7 @@ class CustomSession(SQLiteSession):
             or "/" in session_id
         ):
             if not session_path.exists() and not create:
-                raise FileNotFoundError(f"Session file not found: {session_path}")
+                raise SessionNotFoundError(f"Session file not found: {session_path}")
             super().__init__(str(session_path))
         else:
             # Search in provided paths
@@ -63,7 +63,7 @@ class CustomSession(SQLiteSession):
             # If not found, create in last path
             if found_path is None:
                 if not create:
-                    raise FileNotFoundError(f"Session file not found: {session_id}")
+                    raise SessionNotFoundError(f"Session file not found: {session_id}")
 
                 last_dir = search_paths[-1]
                 last_dir.mkdir(parents=True, exist_ok=True)

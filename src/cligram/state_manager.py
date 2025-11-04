@@ -386,10 +386,12 @@ class StateManager:
         global logger
         logger = logging.getLogger("cligram.state_manager")
 
-        self.data_dir = Path(data_dir)
+        self.data_dir = Path(data_dir).resolve()
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
-        self.backup_dir = Path(backup_dir) if backup_dir else None
+        self.backup_dir = (
+            Path(backup_dir).resolve() if backup_dir else self.data_dir / "backup"
+        )
         self._need_backup = False
 
         self.lock = asyncio.Lock()

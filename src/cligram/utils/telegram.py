@@ -8,14 +8,16 @@ from ..proxy_manager import Proxy
 from ..session import CustomSession
 
 
-def get_client(config: Config, proxy: Optional[Proxy]) -> TelegramClient:
+def get_client(
+    config: Config, proxy: Optional[Proxy], session: Optional[CustomSession]
+) -> TelegramClient:
     """
     Create a Telethon TelegramClient from the given configuration.
     """
     from .. import __version__
 
     params = {
-        "session": CustomSession(config.telegram.session),
+        "session": session or get_session(config),
         "api_id": config.telegram.api.id,  # API ID from my.telegram.org
         "api_hash": config.telegram.api.hash,  # API hash from my.telegram.org
         "connection_retries": 2,  # Number of attempts before failing
@@ -30,3 +32,10 @@ def get_client(config: Config, proxy: Optional[Proxy]) -> TelegramClient:
         params.update(proxy.export())
 
     return TelegramClient(**params)
+
+
+def get_session(config: Config, create: bool = False) -> CustomSession:
+    """
+    Load a CustomSession based on the configuration.
+    """
+    return CustomSession(session_id=config.telegram.session, create=create)

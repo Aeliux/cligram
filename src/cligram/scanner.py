@@ -3,17 +3,18 @@ import logging
 import random
 import time
 from datetime import datetime
-from platform import node, release, system
 from typing import Any, Dict, List, Optional
 
+from rich.style import Style
 from telethon import TelegramClient, errors, events, functions
 from telethon.tl.custom.dialog import Dialog
 from telethon.tl.types import ChannelParticipantsAdmins, Message, MessageService, User
 
 from . import utils
+from .app import Application
 from .config import Config, WorkMode
+from .exceptions import SessionNotFoundError
 from .proxy_manager import ProxyManager
-from .session import CustomSession
 from .state_manager import StateManager
 
 logger = None  # Will be initialized later
@@ -30,21 +31,20 @@ class TelegramScanner:
     - Managing multiple proxies for connection resilience
     """
 
-    def __init__(self, config: Config, state_manager: StateManager):
+    def __init__(self, app: Application):
         """
         Initialize scanner with configuration and state management.
 
         Args:
-            config: Application configuration instance
-            state_manager: State management instance for persistence
+            app: Application instance
         """
         global logger
         logger = logging.getLogger("cligram.scanner")
 
-        self.config: Config = config
-        self.state: StateManager = state_manager
-
-        self.proxy_manager: ProxyManager = ProxyManager.from_config(config)
+        self.app: Application = app
+        self.config: Config = app.config
+        self.state: StateManager = app.state
+        self.proxy_manager: ProxyManager = ProxyManager.from_config(app.config)
 
         self.delay_variation = 10
         self._thresholds = {
@@ -658,8 +658,12 @@ class TelegramScanner:
         based on configured mode.
         """
         try:
+            # Get session
+            session = utils.get_session(self.config)
+
             # Test proxies and get working one
-            logger.info("[APP] Testing connections")
+            self.app.status.update("Testing connections...")
+            logger.info("Testing connections")
             await self.proxy_manager.test_proxies(shutdown_event=shutdown_event)
             working_connection = self.proxy_manager.current_proxy
 
@@ -668,25 +672,35 @@ class TelegramScanner:
 
             if working_connection:
                 if working_connection.is_direct:
-                    logger.info("[APP] Using direct connection")
+                    logger.info("Using direct connection")
                 else:
+                    self.app.console.print(
+                        f"Using {working_connection.type.value} proxy: {working_connection.host}:{working_connection.port}"
+                    )
                     logger.info(
-                        f"[PROXY] Using proxy: [{working_connection.type.name}] {working_connection.host}:{working_connection.port}"
+                        f"Using proxy: [{working_connection.type.name}] {working_connection.host}:{working_connection.port}"
                     )
             else:
-                logger.error("[APP] No working connection available, aborting")
+                self.app.console.print("No working connection available, aborting")
+                logger.error("No working connection available, aborting")
                 return
 
+            self.app.status.update("Initializing client...")
             # Create actual client with working connection
-            client: TelegramClient = utils.get_client(self.config, working_connection)
-            logger.info(f"[APP] Logging in with {client.session.filename} session")
+            client: TelegramClient = utils.get_client(
+                config=self.config, proxy=working_connection, session=session
+            )
+
+            self.app.status.update("Logging in...")
+            logger.info(f"Logging in with {client.session.filename} session")
 
             # Continue with client operations
             async with client:
                 if shutdown_event.is_set():
                     return
 
-                logger.debug("[APP] Fetching account information")
+                self.app.status.update("Fetching account information...")
+                logger.debug("Fetching account information")
                 me: User = await client.get_me()
 
                 if me.first_name and me.last_name:
@@ -694,89 +708,117 @@ class TelegramScanner:
                 else:
                     name = me.first_name
 
-                logger.debug("[APP] Updating status to online")
+                self.app.status.update("Updating status...")
+                logger.debug("Updating status to online")
                 result = await client(
                     functions.account.UpdateStatusRequest(offline=False)
                 )
                 if not result:
-                    logger.error("[APP] Failed to set status to online")
+                    self.app.console.print(
+                        "Failed to set status to online", style=Style(color="red")
+                    )
+                    logger.error("Failed to set status to online")
                 else:
-                    logger.debug("[APP] Status set to online successfully")
+                    logger.debug("Status set to online successfully")
 
-                logger.info(f"[APP] Logged in as {name} (ID: {me.id})")
+                self.app.console.print(f"Logged in as {name} (ID: {me.id})")
+                logger.info(f"Logged in as {name} (ID: {me.id})")
 
-                # Print detailed account info for debugging
+                # Log detailed account info for debugging
                 if self.config.app.verbose:
-                    logger.debug(f"[INFO] Account ID: {me.id}")
-                    logger.debug(f"[INFO] Full Name: {name}")
-                    logger.debug(f"[INFO] Username: {me.username}")
-                    logger.debug(f"[INFO] Phone: {me.phone}")
+                    logger.debug(f"Account ID: {me.id}")
+                    logger.debug(f"Full Name: {name}")
+                    logger.debug(f"Username: {me.username}")
+                    logger.debug(f"Phone: {me.phone}")
 
                 # Show unread messages count
-                logger.debug("[INFO] Checking for unread messages")
+                self.app.status.update("Checking unread messages...")
+                logger.debug("Checking for unread messages")
                 total_unread = 0
                 async for dialog in client.iter_dialogs(limit=50):
-                    logger.debug(f"[DIALOG] Processing {dialog.name} ({dialog.id})")
+                    logger.debug(f"Processing {dialog.name} ({dialog.id})")
                     try:
                         unread = int(getattr(dialog, "unread_count", 0) or 0)
                     except Exception:
                         unread = 0
-                    logger.debug(f"[DIALOG] Unread count: {unread}")
+                    logger.debug(f"Unread count: {unread}")
                     if unread <= 0:
                         continue
                     muted = self._is_dialog_muted(dialog)
-                    logger.debug(f"[DIALOG] Is muted: {muted}")
+                    logger.debug(f"Is muted: {muted}")
                     if muted:
                         continue
                     total_unread += unread
 
                 if total_unread > 0:
-                    logger.warning(f"[INFO] You have {total_unread} unread messages")
+                    self.app.console.print(
+                        f"You have {total_unread} unread messages",
+                        style=Style(color="yellow"),
+                    )
+                    logger.warning(f"You have {total_unread} unread messages")
                 else:
-                    logger.debug("[INFO] No unread messages")
+                    logger.debug("No unread messages")
 
                 try:
                     await self.start(client, shutdown_event)
                 finally:
+                    self.app.status.update("Shutting down client...")
                     if not client.is_connected():
                         if self.config.app.mode != WorkMode.LOGOUT:
-                            logger.warning("[APP] Client disconnected unexpectedly")
+                            logger.warning("Client disconnected unexpectedly")
 
                         return
 
-                    logger.debug("[APP] Updating status to offline")
+                    logger.debug("Updating status to offline")
                     result = await client(
                         functions.account.UpdateStatusRequest(offline=True)
                     )
                     if not result:
-                        logger.error("[APP] Failed to set status to offline")
+                        logger.error("Failed to set status to offline")
                     else:
-                        logger.debug("[APP] Status set to offline successfully")
+                        logger.debug("Status set to offline successfully")
 
-            logger.info("[APP] Client session closed")
+            logger.info("Client session closed")
 
+        except SessionNotFoundError as e:
+            self.app.console.print(
+                "Session not found: ",
+                self.config.telegram.session,
+                style=Style(color="red"),
+            )
+            logger.error(f"Session not found: {e}")
         except Exception as e:
-            logger.error(f"[ERROR] Unexpected error: {e}")
+            logger.error(f"Unexpected error: {e}")
             raise
 
     async def start(self, client: TelegramClient, shutdown_event: asyncio.Event):
+        self.app.status.update("Starting operations...")
+
         if self.config.app.mode == WorkMode.HALT:
             return
 
         # Account logout
         if self.config.app.mode == WorkMode.LOGOUT:
-            user_input = input(
+            user_input = self.app.console.input(
                 "Are you sure you want to log out and delete the session? (y/N): "
             )
             if user_input.lower() == "y":
-                logger.info("[LOGOUT] Logging out and deleting session")
+                self.app.status.update("Logging out...")
+                logger.info("Logging out and deleting session")
                 result = await client.log_out()
                 if result:
-                    logger.info("[LOGOUT] Logged out successfully")
+                    self.app.console.print(
+                        "Logged out successfully", style=Style(color="green")
+                    )
+                    logger.info("Logged out successfully")
                 else:
-                    logger.error("[LOGOUT] Failed to log out")
+                    self.app.console.print(
+                        "Failed to log out", style=Style(color="red")
+                    )
+                    logger.error("Failed to log out")
             else:
-                logger.info("[LOGOUT] Logout canceled")
+                self.app.console.print("Logout canceled", style=Style(color="yellow"))
+                logger.info("Logout canceled")
             return
 
         # Process exclusions if any
@@ -790,7 +832,7 @@ class TelegramScanner:
 
         saved_msgs = await self.get_saved_messages(client)
         if not saved_msgs:
-            logger.error("[ERROR] No saved messages available")
+            logger.error("No saved messages available")
             return
 
         if self.config.app.mode == WorkMode.SEND:
