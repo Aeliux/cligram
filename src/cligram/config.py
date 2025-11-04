@@ -223,6 +223,9 @@ class TelegramConfig:
     proxies: List[str] = field(default_factory=list)
     """List of proxy URLs to try for connection"""
 
+    direct_connection: bool = True
+    """Whether to allow direct connection"""
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "TelegramConfig":
         return cls(
@@ -231,6 +234,10 @@ class TelegramConfig:
             proxies=data.get(
                 "proxies", cls.__dataclass_fields__["proxies"].default_factory()
             ),
+            direct_connection=data.get(
+                "direct_connection",
+                cls.__dataclass_fields__["direct_connection"].default,
+            ),
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -238,6 +245,7 @@ class TelegramConfig:
             "api": self.api.to_dict(),
             "session": self.session,
             "proxies": self.proxies,
+            "direct_connection": self.direct_connection,
         }
 
 

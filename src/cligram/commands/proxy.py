@@ -57,30 +57,29 @@ async def run_tests(
         )
         table.add_column("Status", justify="center", vertical="middle", max_width=15)
 
-        for result in results:
-            for i, result in enumerate(results):
-                status = (
-                    f"{result.latency:.0f}ms"
-                    if result.success
-                    else f"Failed ({result.error})"
-                )
+        for i, result in enumerate(results):
+            status = (
+                f"{result.latency:.0f}ms"
+                if result.success
+                else f"Failed ({result.error})"
+            )
 
-                style = Style(
-                    color=(
-                        "red"
-                        if not result.success
-                        else "green" if result.latency < 1000 else None
-                    )
+            style = Style(
+                color=(
+                    "red"
+                    if not result.success
+                    else "green" if result.latency < 1000 else None
                 )
+            )
 
-                table.add_row(
-                    str(i + 1),
-                    result.proxy.type.value,
-                    _get_proxy_host(result.proxy, use_url=use_url),
-                    status,
-                    style=style,
-                )
-            con.print(table)
+            table.add_row(
+                str(i + 1),
+                result.proxy.type.value,
+                _get_proxy_host(result.proxy, use_url=use_url),
+                status,
+                style=style,
+            )
+        con.print(table)
     finally:
         shutdown_event.set()
 
@@ -141,9 +140,7 @@ def list_proxies(
     List all configured proxies.
     """
     config: Config = ctx.obj["g_load_config"]()
-    proxy_manager = ProxyManager()
-    for proxy in config.telegram.proxies:
-        proxy_manager.add_proxy(proxy)
+    proxy_manager = ProxyManager.from_config(config)
 
     if not proxy_manager.proxies:
         typer.echo("No proxies configured.")
@@ -166,9 +163,7 @@ def test_proxies(
     Test all configured proxies and report their status.
     """
     config: Config = ctx.obj["g_load_config"]()
-    proxy_manager = ProxyManager()
-    for proxy in config.telegram.proxies:
-        proxy_manager.add_proxy(proxy)
+    proxy_manager = ProxyManager.from_config(config)
 
     asyncio.run(
         run_tests(proxy_manager, shutdown_event=None, use_url=show_url, timeout=timeout)
@@ -197,9 +192,7 @@ def remove_proxy(
         raise typer.Exit()
     c = 0
     if unreachable:
-        proxy_manager = ProxyManager()
-        for proxy in config.telegram.proxies:
-            proxy_manager.add_proxy(proxy)
+        proxy_manager = ProxyManager.from_config(config, exclude_direct=True)
         results: list[ProxyTestResult] = asyncio.run(
             run_tests(proxy_manager, shutdown_event=None, use_url=False)
         )
@@ -208,6 +201,9 @@ def remove_proxy(
         ]
         typer.echo(f"Found {len(proxy_url)} unreachable proxy(s).")
     for proxy_url in url:
+        if proxy_url == "direct":
+            typer.echo("You must disable direct connection manually in the config.")
+            continue
         if proxy_url in config.telegram.proxies:
             config.telegram.proxies.remove(proxy_url)
             c += 1

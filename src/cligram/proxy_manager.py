@@ -12,6 +12,8 @@ import socks
 from telethon import TelegramClient
 from telethon.network import ConnectionTcpMTProxyRandomizedIntermediate
 
+from .config import Config
+
 
 class ProxyType(Enum):
     """
@@ -83,6 +85,18 @@ class Proxy:
 
         return params
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Proxy):
+            return False
+        if self.type == ProxyType.DIRECT and other.type == ProxyType.DIRECT:
+            return True
+        return self.url == other.url
+
+    def __hash__(self) -> int:
+        if self.type == ProxyType.DIRECT:
+            return hash("direct_connection")
+        return hash(self.url)
+
 
 class ProxyManager:
     """
@@ -94,6 +108,26 @@ class ProxyManager:
     - Automatic proxy selection
     - Proxy failover support
     """
+
+    @classmethod
+    def from_config(
+        cls, config: Config, exclude_direct: bool = False
+    ) -> "ProxyManager":
+        """
+        Create ProxyManager instance from application config.
+
+        Args:
+            config: Application configuration object
+
+        Returns:
+            ProxyManager instance
+        """
+        proxy_manager = cls()
+        for proxy in config.telegram.proxies:
+            proxy_manager.add_proxy(proxy)
+        if config.telegram.direct_connection and not exclude_direct:
+            proxy_manager.add_direct_proxy()
+        return proxy_manager
 
     def __init__(self):
         self.proxies: List[Proxy] = []
@@ -267,48 +301,11 @@ async def ping_mtproto(
     proxy: "Proxy", timeout: float = 30.0
 ) -> Tuple[bool, Optional[float], Optional[str]]:
     """Test MTProto proxy using actual Telegram connection."""
-    start = time.time()
-
-    try:
-        # Create temporary client for testing
-        client = TelegramClient(
-            None,  # Memory session
-            1,  # Dummy API ID
-            "0" * 32,  # Dummy API hash
-            connection=ConnectionTcpMTProxyRandomizedIntermediate,
-            proxy=(proxy.host, proxy.port, proxy.secret),
-            timeout=timeout,
-            auto_reconnect=False,
-            connection_retries=1,
-            retry_delay=1,
-        )
-
-        # Test basic connection
-        await asyncio.wait_for(client.connect(), timeout)
-        success = True
-        error = None
-
-    except asyncio.TimeoutError:
-        success = False
-        error = "Connection timed out"
-    except ConnectionError as e:
-        if "Invalid DC" in str(e):
-            success = True
-            error = None
-        else:
-            success = False
-            error = str(e)
-    except Exception as e:
-        success = False
-        error = str(e)
-    finally:
-        try:
-            await client.disconnect()
-        except:
-            pass
-
-    latency = (time.time() - start) * 1000 if success else None
-    return success, latency, error
+    return await _test_telegram_connection(
+        timeout=timeout,
+        connection=ConnectionTcpMTProxyRandomizedIntermediate,
+        proxy=(proxy.host, proxy.port, proxy.secret),
+    )
 
 
 async def ping_socks5(
@@ -360,6 +357,75 @@ async def ping_socks5(
         return False, None, str(e)
 
 
+async def ping_direct(
+    proxy: "Proxy", timeout: float = 30.0
+) -> Tuple[bool, Optional[float], Optional[str]]:
+    """Test direct connection to Telegram servers."""
+    return await _test_telegram_connection(timeout=timeout, proxy=proxy)
+
+
+async def _test_telegram_connection(
+    timeout: float = 30.0,
+    connection=None,
+    proxy=None,
+) -> Tuple[bool, Optional[float], Optional[str]]:
+    """Helper function to test Telegram connection with or without proxy."""
+    start = time.time()
+
+    try:
+        # Create temporary client for testing
+        kwargs = {
+            "timeout": timeout,
+            "auto_reconnect": False,
+            "connection_retries": 1,
+            "retry_delay": 1,
+        }
+
+        if connection:
+            kwargs["connection"] = connection
+        if not isinstance(proxy, Proxy) or proxy.type != ProxyType.DIRECT:
+            kwargs["proxy"] = proxy
+
+        client = TelegramClient(
+            None,  # Memory session
+            1,  # Dummy API ID
+            "0" * 32,  # Dummy API hash
+            **kwargs,
+        )
+
+        # Test basic connection
+        await asyncio.wait_for(client.connect(), timeout)
+        success = True
+        error = None
+
+    except asyncio.TimeoutError:
+        success = False
+        error = "Connection timed out"
+    except ConnectionError as e:
+        if "Invalid DC" in str(e):
+            success = True
+            error = None
+        else:
+            success = False
+            error = str(e)
+    except Exception as e:
+        success = False
+        error = str(e)
+    finally:
+        try:
+            if isinstance(proxy, Proxy) and proxy.type == ProxyType.DIRECT:
+                proxy.host = client.session.server_address
+                proxy.port = client.session.port
+                proxy.url = f"dc:{client.session.dc_id}"
+
+            await client.disconnect()
+        except:
+            pass
+
+    latency = (time.time() - start) * 1000 if success else None
+    return success, latency, error
+
+
 async def test_proxy(
     proxy: "Proxy", timeout: float = 5.0, shutdown_event: Optional[asyncio.Event] = None
 ) -> ProxyTestResult:
@@ -367,8 +433,17 @@ async def test_proxy(
     if shutdown_event and shutdown_event.is_set():
         return ProxyTestResult(proxy, False, error="Test cancelled")
 
-    test_func = ping_mtproto if proxy.type == ProxyType.MTPROTO else ping_socks5
-    success, latency, error = await test_func(proxy, timeout)
+    if proxy.type == ProxyType.MTPROTO:
+        test_func = ping_mtproto
+        success, latency, error = await test_func(proxy, timeout)
+    elif proxy.type == ProxyType.SOCKS5:
+        test_func = ping_socks5
+        success, latency, error = await test_func(proxy, timeout)
+    elif proxy.type == ProxyType.DIRECT:
+        success, latency, error = await ping_direct(proxy, timeout)
+    else:
+        return ProxyTestResult(proxy, False, error="Unknown proxy type")
+
     return ProxyTestResult(proxy, success, latency, error)
 
 
