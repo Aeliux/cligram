@@ -61,6 +61,11 @@ class Proxy:
     password: Optional[str] = None
     """SOCKS5 authentication password"""
 
+    @property
+    def is_direct(self) -> bool:
+        """Check if the proxy is a direct connection."""
+        return self.type == ProxyType.DIRECT
+
     def export(self):
         """
         Export proxy configuration for Telethon client.

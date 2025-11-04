@@ -45,9 +45,7 @@ class TelegramScanner:
         self.config: Config = config
         self.state: StateManager = state_manager
 
-        self.proxy_manager: ProxyManager = ProxyManager()
-        for proxy_url in self.config.telegram.proxies:
-            self.proxy_manager.add_proxy(proxy_url)
+        self.proxy_manager: ProxyManager = ProxyManager.from_config(config)
 
         self.delay_variation = 10
         self._thresholds = {
@@ -675,22 +673,24 @@ class TelegramScanner:
         try:
             # Test proxies and get working one
             await self.proxy_manager.test_proxies(shutdown_event=shutdown_event)
-            working_proxy = self.proxy_manager.current_proxy
+            working_connection = self.proxy_manager.current_proxy
 
             if shutdown_event.is_set():
                 return
 
             final_params = self.client_params.copy()
 
-            if working_proxy:
-                logger.info(
-                    f"[PROXY] Found working {working_proxy.type.value} proxy: {working_proxy.host}:{working_proxy.port}"
-                )
-                final_params.update(working_proxy.export())
+            if working_connection:
+                if working_connection.is_direct:
+                    logger.info("[APP] Using direct connection")
+                else:
+                    logger.info(
+                        f"[PROXY] Using proxy: [{working_connection.type.name}] {working_connection.host}:{working_connection.port}"
+                    )
+                final_params.update(working_connection.export())
             else:
-                logger.warning(
-                    "[PROXY] No working proxy found, using direct connection"
-                )
+                logger.error("[APP] No working connection available, aborting")
+                return
 
             # Create actual client with working proxy
             client: TelegramClient = TelegramClient(**final_params)
