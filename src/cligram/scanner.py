@@ -12,7 +12,7 @@ from telethon.tl.types import ChannelParticipantsAdmins, Message, MessageService
 
 from . import utils
 from .app import Application
-from .config import Config, WorkMode
+from .config import Config, ScanMode
 from .exceptions import SessionNotFoundError
 from .proxy_manager import ProxyManager
 from .state_manager import StateManager
@@ -49,10 +49,10 @@ class TelegramScanner:
         self.delay_variation = 10
         self._thresholds = {
             "skip": (
-                20 if self.config.app.mode in (WorkMode.FULL, WorkMode.SEND) else 50
+                20 if self.config.scan.mode in (ScanMode.FULL, ScanMode.SEND) else 50
             ),
             "scan": (
-                50 if self.config.app.mode in (WorkMode.FULL, WorkMode.SEND) else 100
+                50 if self.config.scan.mode in (ScanMode.FULL, ScanMode.SEND) else 100
             ),
             "process": 20,
         }
@@ -155,7 +155,7 @@ class TelegramScanner:
         The delay duration is chosen based on configured normal and long break periods,
         with long break periods occurring based on probability settings.
         """
-        delay = self.config.scan.delays.random()
+        delay = self.config.app.delays.random()
         logger.debug(f"[DELAY] Sleeping for {delay:.2f} seconds")
 
         # Sleep with cancellation support
@@ -219,7 +219,7 @@ class TelegramScanner:
 
         try:
             # For scan/send modes, require username
-            if self.config.app.mode != WorkMode.FULL and not username:
+            if self.config.scan.mode != ScanMode.FULL and not username:
                 logger.debug(f"[SKIP] User {uid} has no username")
                 return False
 
@@ -227,7 +227,7 @@ class TelegramScanner:
                 logger.debug(f"[SKIP] User {username or uid} already messaged")
                 return False
 
-            if self.config.app.mode == WorkMode.SCAN:
+            if self.config.scan.mode == ScanMode.SCAN:
                 if username and username in self.state.users.eligible:
                     logger.debug(f"[SKIP] User {username} already eligible")
                     return False
@@ -235,7 +235,7 @@ class TelegramScanner:
                 logger.info(f"[DONE] Added username {username} to eligible list")
                 return True
 
-            if self.config.app.mode in (WorkMode.FULL, WorkMode.SEND):
+            if self.config.scan.mode in (ScanMode.FULL, ScanMode.SEND):
                 msg_id = random.choice(msg_ids)
                 if not self.config.scan.test:
                     logger.info(
@@ -544,7 +544,7 @@ class TelegramScanner:
                     if self.config.app.rapid_save:
                         await self.state.save()
                     # Only delay every N successful processes in scan mode
-                    if self.config.app.mode != WorkMode.SCAN or processed % 20 == 0:
+                    if self.config.scan.mode != ScanMode.SCAN or processed % 20 == 0:
                         await self.human_delay(shutdown_event)
                 else:
                     logger.debug(
@@ -764,7 +764,7 @@ class TelegramScanner:
                 finally:
                     self.app.status.update("Shutting down client...")
                     if not client.is_connected():
-                        if self.config.app.mode != WorkMode.LOGOUT:
+                        if self.config.scan.mode != ScanMode.LOGOUT:
                             logger.warning("Client disconnected unexpectedly")
 
                         return
@@ -794,11 +794,11 @@ class TelegramScanner:
     async def start(self, client: TelegramClient, shutdown_event: asyncio.Event):
         self.app.status.update("Starting operations...")
 
-        if self.config.app.mode == WorkMode.HALT:
+        if self.config.scan.mode == ScanMode.HALT:
             return
 
         # Account logout
-        if self.config.app.mode == WorkMode.LOGOUT:
+        if self.config.scan.mode == ScanMode.LOGOUT:
             user_input = self.app.console.input(
                 "Are you sure you want to log out and delete the session? (y/N): "
             )
@@ -826,7 +826,7 @@ class TelegramScanner:
             await self._resolve_exclusions(client, shutdown_event)
             return
 
-        if self.config.app.mode == WorkMode.RECEIVE:
+        if self.config.scan.mode == ScanMode.RECEIVE:
             await self.receive_mode(client, shutdown_event)
             return
 
@@ -835,7 +835,7 @@ class TelegramScanner:
             logger.error("No saved messages available")
             return
 
-        if self.config.app.mode == WorkMode.SEND:
+        if self.config.scan.mode == ScanMode.SEND:
             await self.send_mode(client, saved_msgs, shutdown_event)
         else:
             await self.scan_mode(client, saved_msgs, shutdown_event)

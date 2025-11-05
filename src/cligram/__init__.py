@@ -1,6 +1,6 @@
 from . import utils
 from .app import Application
-from .config import Config, WorkMode
+from .config import Config, ScanMode
 from .exceptions import SessionMismatchError, SessionNotFoundError
 from .logger import setup_logger
 from .proxy_manager import Proxy, ProxyManager
@@ -11,7 +11,7 @@ from .state_manager import StateManager
 __all__ = [
     "Application",
     "Config",
-    "WorkMode",
+    "ScanMode",
     "TelegramScanner",
     "StateManager",
     "setup_logger",

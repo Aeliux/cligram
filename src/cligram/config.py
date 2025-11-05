@@ -3,6 +3,7 @@ import hashlib
 import json
 import random
 from dataclasses import asdict, dataclass, field
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -10,7 +11,7 @@ from typing import Any, Dict, List, Optional
 GLOBAL_CONFIG_DIR = Path.home() / ".cligram"
 
 
-class WorkMode(Enum):
+class ScanMode(Enum):
     """Operation modes for the scanner."""
 
     FULL = "full"
@@ -65,10 +66,10 @@ class ApiConfig:
 class DelayConfig:
     """Delay interval configuration."""
 
-    min: float = 1.0
+    min: float = 10.0
     """Minimum delay in seconds"""
 
-    max: float = 3.0
+    max: float = 20.0
     """Maximum delay in seconds"""
 
     def random(self) -> float:
@@ -90,10 +91,11 @@ class DelayConfig:
 class LongDelayConfig(DelayConfig):
     """Configuration for long delay periods."""
 
-    min: float = 10.0
-    max: float = 30.0
+    min: float = 30.0
+    max: float = 60.0
+
     chance: float = 0.1
-    """Probability (0-1) of taking a break"""
+    """Probability (0-1) of taking a long delay instead of normal delay"""
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "LongDelayConfig":
@@ -151,7 +153,7 @@ class MessagesConfig:
     source: str = "me"
     """Source of messages to forward ('me' or channel username)"""
 
-    limit: int = 100
+    limit: int = 20
     """Maximum number of messages to be loaded from source"""
 
     msg_id: Optional[int] = None
@@ -181,13 +183,13 @@ class ScanConfig:
     messages: MessagesConfig = field(default_factory=MessagesConfig)
     """Message forwarding settings"""
 
-    delays: DelaysConfig = field(default_factory=DelaysConfig)
-    """Delay timing configurations"""
+    mode: ScanMode = ScanMode.FULL
+    """Operation mode"""
 
     targets: List[str] = field(default_factory=list)
     """List of target groups to scan (usernames or URLs)"""
 
-    limit: int = 100
+    limit: int = 50
     """Maximum number of messages to scan per group"""
 
     test: bool = False
@@ -197,7 +199,9 @@ class ScanConfig:
     def from_dict(cls, data: Dict[str, Any]) -> "ScanConfig":
         return cls(
             messages=MessagesConfig.from_dict(data.get("messages", {})),
-            delays=DelaysConfig.from_dict(data.get("delays", {})),
+            mode=ScanMode(
+                data.get("mode", cls.__dataclass_fields__["mode"].default.value)
+            ),
             targets=data.get(
                 "targets", cls.__dataclass_fields__["targets"].default_factory()
             ),
@@ -208,7 +212,7 @@ class ScanConfig:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "messages": self.messages.to_dict(),
-            "delays": self.delays.to_dict(),
+            "mode": self.mode.value,
             "targets": self.targets,
             "limit": self.limit,
             "test": self.test,
@@ -258,8 +262,8 @@ class TelegramConfig:
 class AppConfig:
     """Main application behavior configuration."""
 
-    mode: WorkMode = WorkMode.FULL
-    """Operation mode"""
+    delays: DelaysConfig = field(default_factory=DelaysConfig)
+    """Delay timing configurations"""
 
     verbose: bool = False
     """Enable debug logging"""
@@ -270,9 +274,7 @@ class AppConfig:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "AppConfig":
         return cls(
-            mode=WorkMode(
-                data.get("mode", cls.__dataclass_fields__["mode"].default.value)
-            ),
+            delays=DelaysConfig.from_dict(data.get("delays", {})),
             verbose=data.get("verbose", cls.__dataclass_fields__["verbose"].default),
             rapid_save=data.get(
                 "rapid_save", cls.__dataclass_fields__["rapid_save"].default
@@ -281,7 +283,7 @@ class AppConfig:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "mode": self.mode.value,
+            "delays": self.delays.to_dict(),
             "verbose": self.verbose,
             "rapid_save": self.rapid_save,
         }
@@ -362,8 +364,8 @@ class Config:
         # Check if config structure changed (new fields added)
         new_data = config.to_dict()
         if not cls._config_equal(original_data, new_data):
+            config._update_config(original_data, new_data)
             config.updated = True
-            cls._backup_and_update_config(config_full_path, original_data, new_data)
 
         if not cls.get_config(raise_if_failed=False):
             cls._config_instance = config
@@ -480,8 +482,8 @@ class Config:
         # Type conversion for enums
         if hasattr(obj.__class__, "__dataclass_fields__"):
             field_info = obj.__class__.__dataclass_fields__.get(attr)
-            if field_info and field_info.type == WorkMode:
-                value = WorkMode(value)
+            if field_info and field_info.type == ScanMode:
+                value = ScanMode(value)
 
         setattr(obj, attr, value)
 
@@ -547,32 +549,20 @@ class Config:
         # Compare keys only
         return set(flat_old.keys()) == set(flat_new.keys())
 
-    @staticmethod
-    def _backup_and_update_config(
-        config_path: Path, old_data: Dict[str, Any], new_data: Dict[str, Any]
-    ):
-        """
-        Backup old config and save updated config with new fields.
-
-        Args:
-            config_path: Path to the configuration file
-            old_data: Original configuration data from file
-            new_data: New configuration data with all fields
-        """
-        from datetime import datetime
+    def _update_config(self, old_data: Dict[str, Any], new_data: Dict[str, Any]):
+        # Migrate existing config keys to new structure
 
         # Create backup
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_path = (
-            config_path.parent
-            / f"{config_path.stem}.backup.{timestamp}{config_path.suffix}"
+            self.path.parent / f"{self.path.stem}.backup.{timestamp}{self.path.suffix}"
         )
 
         with open(backup_path, "w") as f:
             json.dump(old_data, f, indent=2)
 
         # Save updated config
-        with open(config_path, "w") as f:
+        with open(self.path, "w") as f:
             json.dump(new_data, f, indent=2)
 
 

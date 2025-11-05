@@ -7,7 +7,7 @@ import typer
 
 from . import commands
 from .app import Application
-from .config import Config, WorkMode, find_config_file
+from .config import Config, ScanMode, find_config_file
 from .logger import setup_logger
 
 
@@ -52,8 +52,8 @@ def run(
     rapid_save: bool = typer.Option(
         False, "--rapid-save", help="Enable rapid state saving to disk"
     ),
-    mode: WorkMode = typer.Option(
-        WorkMode.FULL.value, "-m", "--mode", help="Operation mode"
+    mode: ScanMode = typer.Option(
+        ScanMode.FULL.value, "-m", "--mode", help="Operation mode"
     ),
     session: Optional[str] = typer.Option(
         None, "-s", "--session", help="Telethon session name for authentication"
@@ -75,7 +75,7 @@ def run(
     if rapid_save:
         config.app.rapid_save = True
     if mode:
-        config.app.mode = mode
+        config.scan.mode = mode
     if session:
         config.telegram.session = session
     if limit is not None:

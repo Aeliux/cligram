@@ -8,7 +8,7 @@ from typing import Callable, Optional
 from rich import get_console
 from rich.status import Status
 
-from .config import Config, WorkMode
+from .config import Config, ScanMode
 from .state_manager import StateManager
 
 logger = None  # Global logger instance
@@ -120,7 +120,7 @@ class Application:
         Raises:
             asyncio.CancelledError: If shutdown is requested during sleep
         """
-        remaining = delay = self.config.scan.delays.random()
+        remaining = delay = self.config.app.delays.random()
         steps = 0.1
         cur_status = self.status.status
 
@@ -155,7 +155,7 @@ class Application:
         self.status.start()
 
         self.console.print(f"[bold green]cligram v{__version__}[/bold green]")
-        logger.info(f"Starting application in {self.config.app.mode.value} mode")
+        logger.info(f"Starting application v{__version__}")
 
         self.status.update("Initializing...")
         # Setup platform-specific signal handlers
@@ -164,6 +164,7 @@ class Application:
         logger.debug(f"Loaded configuration: {self.config.path}")
 
         if self.config.updated:
+            self.console.print("[bold yellow]Configuration file updated[/bold yellow]")
             logger.warning("Configuration updated with new fields")
 
         self.status.update("Loading state...")
