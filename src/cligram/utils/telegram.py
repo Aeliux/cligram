@@ -40,7 +40,7 @@ def get_client(
         "connection_retries": 2,  # Number of attempts before failing
         "device_model": node(),  # Real device model
         "system_version": f"{system()} {release()}",  # Real system details
-        "app_version": f"cligram v{__version__}",  # Package version
+        "app_version": __version__,  # Package version
         "lang_code": "en",  # Language to use for Telegram
         "timeout": 10,  # Timeout in seconds for requests
     }
