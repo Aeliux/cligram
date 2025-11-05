@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import logging
 import sys
@@ -75,7 +76,10 @@ class Command:
     description: str
     """The description of the command."""
 
-    handler: Callable[["CommandHandler", List[str]], Awaitable[None]]
+    parser: argparse.ArgumentParser
+    """The argument parser for the command."""
+
+    handler: Callable[["CommandHandler", argparse.Namespace], Awaitable[None]]
     """The function that handles the command."""
 
 
@@ -87,17 +91,51 @@ class CommandHandler:
         self.client = client
         self.commands: dict[str, Command] = {}
 
-        self.commands["resolve"] = Command(
-            name="resolve",
-            description="Resolve a Telegram entity by username or ID, with optional flags -a/--all for full data",
-            handler=self.cmd_resolve,
+        resolveParser = argparse.ArgumentParser(
+            prog="resolve", description="Resolve a Telegram entity", exit_on_error=False
         )
+        resolveParser.add_argument(
+            "entity_name", type=str, help="Username or ID of the entity to resolve"
+        )
+        resolveParser.add_argument(
+            "-a", "--all", action="store_true", help="Show full data of the entity"
+        )
+
+        self.add_command(
+            Command(
+                name="resolve",
+                description="Resolve a Telegram entity by username or ID",
+                parser=resolveParser,
+                handler=self.cmd_resolve,
+            )
+        )
+
+    def add_command(self, command: Command):
+        """Add a new command."""
+        if command.name in self.commands:
+            raise ValueError(f"Command {command.name} already exists.")
+
+        if not isinstance(command.parser, argparse.ArgumentParser):
+            raise TypeError(
+                "Command parser must be an instance of argparse.ArgumentParser."
+            )
+
+        if command.parser.exit_on_error:
+            raise ValueError("Command parser must not exit on error.")
+
+        if not callable(command.handler):
+            raise TypeError("Command handler must be callable.")
+
+        if not asyncio.iscoroutinefunction(command.handler):
+            raise TypeError("Command handler must be an async function.")
+
+        self.commands[command.name] = command
 
     async def handle_command(self, command: str):
         """Handle user commands."""
         parts = command.split(" ")
         cmd = parts[0]
-        args = parts[1:]
+
         if cmd == "help":
             self.app.console.print("[bold]Available Commands:[/bold]")
             table = Table.grid(padding=(0, 5))
@@ -107,13 +145,21 @@ class CommandHandler:
             for command in self.commands.values():
                 table.add_row(f"[bold]{command.name}[/bold]", command.description)
             self.app.console.print(table)
+            self.app.console.print()
+            self.app.console.print(
+                "\nType <command> --help for more details on a command."
+            )
         elif cmd in self.commands:
             command_obj = self.commands[cmd]
-            await command_obj.handler(self, args)
+            try:
+                parsed = command_obj.parser.parse_args(parts)
+            except SystemExit:
+                return
+            await command_obj.handler(self, parsed)
         else:
             self.app.console.print(f"[dim]Unknown command: {command}[/dim]")
 
-    async def get_entity(self, query: hints.EntitiesLike):
+    async def get_entity(self, query: str):
         """Get entity."""
         try:
             query = int(query)
@@ -123,19 +169,15 @@ class CommandHandler:
         entity: hints.Entity = await self.client.get_entity(query)
         return entity
 
-    async def cmd_resolve(self, _, args: List[str]):
+    async def cmd_resolve(self, _, args: List[str] | argparse.Namespace):
         """Handler for resolve command."""
-        if not args:
-            self.app.console.print("[red]Usage: resolve <entity_name>[/red]")
+        if not isinstance(args, argparse.Namespace):
+            self.app.console.print("[red]Invalid arguments for resolve command.[/red]")
             return
 
-        # detect and remove flags from args
-        flags = [arg for arg in args if arg.startswith("-")]
-        args = [arg for arg in args if not arg.startswith("-")]
+        entity_name = args.entity_name
+        extend = args.all
 
-        extend = "-a" in flags or "--all" in flags
-
-        entity_name = args[0]
         try:
             entity = await self.get_entity(entity_name)
             self.app.console.print(f"[green]Entity resolved:[/green] {entity.id}")

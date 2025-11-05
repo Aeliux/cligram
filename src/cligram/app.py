@@ -2,6 +2,7 @@ import asyncio
 import logging
 import platform
 import signal
+import sys
 from typing import Callable, Optional
 
 from rich import get_console
@@ -11,8 +12,8 @@ from .config import Config, WorkMode
 from .state_manager import StateManager
 
 logger = None  # Global logger instance
-
 app_instance: Optional["Application"] = None
+_recv_signals: int = 0
 
 
 def get_app() -> "Application":
@@ -60,10 +61,17 @@ class Application:
         Sets shutdown event and allows running operations to complete
         cleanly before terminating.
         """
+        global _recv_signals
+
         if sig:
-            logger.warning(f"Received exit signal {sig}")
-            self.console.print(f"[bold red]Received exit signal {sig}[/bold red]")
-        if self.shutdown_event:
+            _recv_signals += 1
+            if _recv_signals >= 3:
+                sys.exit(255)
+            logger.warning(f"Received exit signal {sig}, count: {_recv_signals}")
+            self.console.print(
+                f"[bold red]Received exit signal {sig}, count: {_recv_signals}[/bold red]"
+            )
+        if not self.shutdown_event.is_set():
             self.shutdown_event.set()
 
     async def setup_signal_handlers(self):
