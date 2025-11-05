@@ -248,6 +248,7 @@ class ProxyManager:
         exclusion: List[Proxy] = [],
         shutdown_event: Optional[asyncio.Event] = None,
         timeout: float = 30.0,
+        oneshot: bool = False,
     ) -> List["ProxyTestResult"]:
 
         candidates = [
@@ -260,7 +261,7 @@ class ProxyManager:
             return None
 
         results = await test_proxies(
-            candidates, timeout=timeout, shutdown_event=shutdown_event
+            candidates, timeout=timeout, shutdown_event=shutdown_event, oneshot=oneshot
         )
 
         # Return first working proxy
@@ -445,15 +446,11 @@ async def test_proxies(
     proxies: List["Proxy"],
     timeout: float = 30.0,
     shutdown_event: Optional[asyncio.Event] = None,
+    oneshot: bool = False,
 ) -> List[ProxyTestResult]:
     """Test multiple proxies concurrently and return sorted results."""
     if not proxies:
         return []
-
-    # Temporarily suppress Telethon logging
-    telethon_logger = logging.getLogger("telethon")
-    original_level = telethon_logger.level
-    telethon_logger.setLevel(logging.CRITICAL)
 
     # Create tasks explicitly using asyncio.create_task
     tasks = [
@@ -467,7 +464,7 @@ async def test_proxies(
             result = await coro
             results.append(result)
 
-            if shutdown_event and shutdown_event.is_set():
+            if oneshot or (shutdown_event and shutdown_event.is_set()):
                 break
     except Exception:
         pass
@@ -480,9 +477,6 @@ async def test_proxies(
                     await task
                 except asyncio.CancelledError:
                     pass
-
-    # Restore original logging level
-    telethon_logger.setLevel(original_level)
 
     # Sort by score (successful proxies first, then by latency)
     results.sort(key=lambda r: r.score)

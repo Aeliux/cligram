@@ -82,7 +82,7 @@ async def _setup_connection(app: Application) -> Proxy | None:
     app.status.update("Testing connections...")
     logger.info("Testing connections")
     proxy_manager = ProxyManager.from_config(app.config)
-    await proxy_manager.test_proxies(shutdown_event=app.shutdown_event)
+    await proxy_manager.test_proxies(shutdown_event=app.shutdown_event, oneshot=True)
     app.check_shutdown()
     return proxy_manager.current_proxy
 
