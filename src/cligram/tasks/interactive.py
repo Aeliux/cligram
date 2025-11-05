@@ -6,9 +6,10 @@ from dataclasses import dataclass
 from typing import Awaitable, Callable, List, Optional
 
 from rich.console import Console
+from rich.control import Control, ControlType
 from rich.table import Table
 from telethon import TelegramClient, events, functions, hints
-from telethon.tl.types import Channel, Chat, Message, User, Username
+from telethon.tl.types import Channel, Chat, Message, TypeInputPeer, User, Username
 
 from .. import Application, utils
 from . import telegram
@@ -58,23 +59,25 @@ class InputHandler:
                 logger.error(f"Error reading input: {e}")
                 break
 
-    async def print_with_prompt(self, *args, **kwargs):
+    async def safe_print(self, *args, **kwargs):
         """Print output while preserving input prompt."""
         async with self.input_lock:
             # Clear current line
-            self.console.print("\r" + " " * self.console.width + "\r", end="")
+            self.console.control(Control(ControlType.CARRIAGE_RETURN))
+            self.console.print(" " * self.console.width, end="")
+            self.console.control(Control(ControlType.CARRIAGE_RETURN))
 
             # Print the message
             self.console.print(*args, **kwargs)
-
-            # Restore prompt
-            self.print_prompt()
 
 
 @dataclass
 class Command:
     name: str
     """The name of the command."""
+
+    aliases: List[str]
+    """The list of aliases for the command."""
 
     description: str
     """The description of the command."""
@@ -95,13 +98,47 @@ class CommandHandler:
         self.app = app
         self.input_handler = input_handler
         self.client = client
+        self.selected_entity: Optional[TypeInputPeer] = None
         self.commands: dict[str, Command] = {}
 
+        self._add_select()
+        self._add_resolve()
+
+    def _add_select(self):
+        selectParser = argparse.ArgumentParser(
+            prog="select", description="Select a Telegram entity", exit_on_error=False
+        )
+        selectParser.add_argument(
+            "entity",
+            nargs="?",
+            default=None,
+            type=str,
+            help="Username or ID of the entity to select",
+        )
+        selectParser.add_argument(
+            "-c", "--clear", action="store_true", help="Clear the current selection"
+        )
+
+        self.add_command(
+            Command(
+                name="select",
+                aliases=[],
+                description="Select a Telegram entity by username or ID",
+                parser=selectParser,
+                handler=self.cmd_select,
+            )
+        )
+
+    def _add_resolve(self):
         resolveParser = argparse.ArgumentParser(
             prog="resolve", description="Resolve a Telegram entity", exit_on_error=False
         )
         resolveParser.add_argument(
-            "entity_name", type=str, help="Username or ID of the entity to resolve"
+            "-e",
+            "--entity",
+            default=None,
+            type=str,
+            help="Username or ID of the entity to resolve, if not provided, will use the selected entity",
         )
         resolveParser.add_argument(
             "-a", "--all", action="store_true", help="Show full data of the entity"
@@ -110,6 +147,7 @@ class CommandHandler:
         self.add_command(
             Command(
                 name="resolve",
+                aliases=[],
                 description="Resolve a Telegram entity by username or ID",
                 parser=resolveParser,
                 handler=self.cmd_resolve,
@@ -158,7 +196,7 @@ class CommandHandler:
         elif cmd in self.commands:
             command_obj = self.commands[cmd]
             try:
-                parsed = command_obj.parser.parse_args(parts)
+                parsed = command_obj.parser.parse_args(parts[1:])
             except argparse.ArgumentError as e:
                 self.app.console.print(f"[red]Argument error:[/red] {e}")
                 return
@@ -168,27 +206,66 @@ class CommandHandler:
         else:
             self.app.console.print(f"[dim]Unknown command: {command}[/dim]")
 
-    async def get_entity(self, query: str):
-        """Get entity."""
+    async def get_input_entity(self, query: str | None):
+        """Get input entity from query or selected entity."""
+        if query is None:
+            if self.selected_entity is None:
+                raise ValueError("No entity selected.")
+            return self.selected_entity
+
         try:
             query = int(query)
         except ValueError:
             pass
 
-        entity: hints.Entity = await self.client.get_entity(query)
-        return entity
+        return await self.client.get_input_entity(query)
 
-    async def cmd_resolve(self, _, args: List[str] | argparse.Namespace):
+    async def cmd_select(self, _, args: argparse.Namespace):
+        """Handler for select command."""
+        if not isinstance(args, argparse.Namespace):
+            self.app.console.print("[red]Invalid arguments for select command.[/red]")
+            return
+
+        if args.clear:
+            self.selected_entity = None
+            self.input_handler.prompt_text = None
+            self.app.console.print("[green]Selection cleared.[/green]")
+            return
+
+        entity_query = args.entity
+        if not entity_query:
+            self.app.console.print("[red]No entity provided to select.[/red]")
+            return
+
+        try:
+            entity = await self.get_input_entity(entity_query)
+            id = (
+                getattr(entity, "user_id", None)
+                or getattr(entity, "channel_id", None)
+                or getattr(entity, "chat_id", None)
+            )
+            if id is None:
+                raise ValueError("Could not determine entity ID.")
+            self.selected_entity = entity
+            self.input_handler.prompt_text = str(id)
+            self.app.console.print(
+                f"[green]Entity selected:[/green] {type(entity).__name__}:{id}"
+            )
+        except Exception as e:
+            self.app.console.print(f"[red]Error selecting entity:[/red] {e}")
+
+    async def cmd_resolve(self, _, args: argparse.Namespace):
         """Handler for resolve command."""
         if not isinstance(args, argparse.Namespace):
             self.app.console.print("[red]Invalid arguments for resolve command.[/red]")
             return
 
-        entity_name = args.entity_name
+        entity_name = args.entity
         extend = args.all
 
         try:
-            entity = await self.get_entity(entity_name)
+            ientity = await self.get_input_entity(entity_name)
+            entity = await self.client.get_entity(ientity)
             self.app.console.print(f"[green]Entity resolved:[/green] {entity.id}")
             table = Table.grid(padding=(0, 5))
             table.add_column("Field")
@@ -300,8 +377,8 @@ async def interactive_callback(
         )
 
         # mark message as read
-        await client.send_read_acknowledge(
-            user, msg.id, clear_mentions=True, clear_reactions=True
+        await client(
+            functions.messages.ReadHistoryRequest(peer=msg.peer_id, max_id=msg.id)
         )
 
     # Wait for shutdown event
@@ -329,8 +406,10 @@ async def print_event(
     """Print a Telegram event without breaking user input."""
     entity_name = utils.get_entity_name(entity)
 
-    await input_handler.print_with_prompt(
+    await input_handler.safe_print(
         f"[bold blue]{event}[/bold blue] from [bold green]{entity_name}[/bold green] (ID: {entity.id})"
     )
     if text:
-        await input_handler.print_with_prompt(text)
+        await input_handler.safe_print(text)
+
+    input_handler.print_prompt()
