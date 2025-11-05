@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import logging
+import shlex
 import sys
 from dataclasses import dataclass
 from typing import Awaitable, Callable, List, Optional
@@ -103,6 +104,7 @@ class CommandHandler:
 
         self._add_select()
         self._add_resolve()
+        self._add_send()
 
     def _add_select(self):
         selectParser = argparse.ArgumentParser(
@@ -154,6 +156,36 @@ class CommandHandler:
             )
         )
 
+    def _add_send(self):
+        sendParser = argparse.ArgumentParser(
+            prog="send",
+            description="Send a message to the selected entity",
+            exit_on_error=False,
+        )
+        sendParser.add_argument(
+            "message",
+            type=str,
+            help="The message text to send",
+        )
+
+        sendParser.add_argument(
+            "-e",
+            "--entity",
+            default=None,
+            type=str,
+            help="Username or ID of the entity to send the message to, if not provided, will use the selected entity",
+        )
+
+        self.add_command(
+            Command(
+                name="send",
+                aliases=[],
+                description="Send a message to the selected entity",
+                parser=sendParser,
+                handler=self.cmd_send,
+            )
+        )
+
     def add_command(self, command: Command):
         """Add a new command."""
         if command.name in self.commands:
@@ -177,7 +209,7 @@ class CommandHandler:
 
     async def handle_command(self, command: str):
         """Handle user commands."""
-        parts = command.split(" ")
+        parts = shlex.split(command)
         cmd = parts[0]
 
         if cmd == "help":
@@ -189,7 +221,6 @@ class CommandHandler:
             for command in self.commands.values():
                 table.add_row(f"[bold]{command.name}[/bold]", command.description)
             self.app.console.print(table)
-            self.app.console.print()
             self.app.console.print(
                 "\nType <command> --help for more details on a command."
             )
@@ -238,18 +269,14 @@ class CommandHandler:
             return
 
         try:
-            entity = await self.get_input_entity(entity_query)
-            id = (
-                getattr(entity, "user_id", None)
-                or getattr(entity, "channel_id", None)
-                or getattr(entity, "chat_id", None)
-            )
+            ientity = await self.get_input_entity(entity_query)
+            id = utils.telegram.get_id_from_input_peer(ientity)
             if id is None:
                 raise ValueError("Could not determine entity ID.")
-            self.selected_entity = entity
+            self.selected_entity = ientity
             self.input_handler.prompt_text = str(id)
             self.app.console.print(
-                f"[green]Entity selected:[/green] {type(entity).__name__}:{id}"
+                f"[green]Entity selected:[/green] {type(ientity).__name__}:{id}"
             )
         except Exception as e:
             self.app.console.print(f"[red]Error selecting entity:[/red] {e}")
@@ -309,6 +336,23 @@ class CommandHandler:
         except Exception as e:
             self.app.console.print(f"[red]Error resolving entity:[/red] {e}")
 
+    async def cmd_send(self, _, args: argparse.Namespace):
+        """Handler for send command."""
+        if not isinstance(args, argparse.Namespace):
+            self.app.console.print("[red]Invalid arguments for send command.[/red]")
+            return
+
+        entity_query = args.entity
+        message_text = args.message
+
+        try:
+            ientity = await self.get_input_entity(entity_query)
+            id = utils.telegram.get_id_from_input_peer(ientity)
+            await self.client.send_message(ientity, message_text)
+            self.app.console.print(f"[green]Message sent to {id}.[/green]")
+        except Exception as e:
+            self.app.console.print(f"[red]Error sending message:[/red] {e}")
+
 
 def _tryattr(obj, attr: str):
     value = getattr(obj, attr, None)
@@ -333,8 +377,6 @@ async def interactive_callback(
 ):
     """Callback for interactive task."""
     app.status.stop()
-    app.console.print("[green]Interactive session started![/green]")
-    app.console.print("[dim]Type help for commands, CTRL+C to exit[/dim]")
 
     input_handler = InputHandler(app.console)
     await input_handler.start()
@@ -381,6 +423,9 @@ async def interactive_callback(
             functions.messages.ReadHistoryRequest(peer=msg.peer_id, max_id=msg.id)
         )
 
+    app.console.print("[green]Interactive session started![/green]")
+    app.console.print("[dim]Type help for commands, CTRL+C to exit[/dim]")
+
     # Wait for shutdown event
     await shutdown_event.wait()
 
@@ -393,6 +438,8 @@ async def interactive_callback(
 
     # Remove event handler
     client.remove_event_handler(handler)
+
+    app.console.print("[green]Interactive session ended[/green]")
 
     app.status.start()
 

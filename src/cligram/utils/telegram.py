@@ -94,6 +94,18 @@ def get_status(entity: User):
         return "N/A"
 
 
+def get_id_from_input_peer(input_peer) -> int:
+    """Extract the unique ID from an input peer object."""
+    if hasattr(input_peer, "user_id") and input_peer.user_id is not None:
+        return input_peer.user_id
+    elif hasattr(input_peer, "chat_id") and input_peer.chat_id is not None:
+        return input_peer.chat_id
+    elif hasattr(input_peer, "channel_id") and input_peer.channel_id is not None:
+        return input_peer.channel_id
+    else:
+        raise ValueError("Input peer does not have a valid ID attribute.")
+
+
 def has_profile_photo(entity: User | Chat | Channel) -> bool:
     """Check if the entity has a profile photo."""
     photo = getattr(entity, "photo", None)

@@ -68,9 +68,7 @@ class Application:
             if _recv_signals >= 3:
                 sys.exit(255)
             logger.warning(f"Received exit signal {sig}, count: {_recv_signals}")
-            self.console.print(
-                f"[bold red]Received exit signal {sig}, count: {_recv_signals}[/bold red]"
-            )
+            self.console.print(f"[bold red]Received exit signal {sig}[/bold red]")
         if not self.shutdown_event.is_set():
             self.shutdown_event.set()
 
@@ -165,10 +163,12 @@ class Application:
 
         try:
             asyncio.run(self.run(task))
-        except asyncio.CancelledError:
+        except (asyncio.CancelledError, KeyboardInterrupt):
             logger.warning("Cancellation requested by user")
-        except KeyboardInterrupt:
-            logger.warning("Interrupted by user")
+            self.console.print(
+                "[bold yellow]Application stopped by user request[/bold yellow]"
+            )
         except Exception as e:
-            logger.error(f"Fatal error: {e}")
+            logger.fatal(f"Fatal error: {e}", exc_info=True)
+            self.console.print(f"[bold red]Fatal error: {e}[/bold red]")
             raise
