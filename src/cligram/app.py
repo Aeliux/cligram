@@ -101,6 +101,39 @@ class Application:
                 except NotImplementedError:
                     logger.warning(f"Failed to set handler for signal {sig}")
 
+    def check_shutdown(self):
+        """
+        Check if shutdown has been requested.
+
+        Raises:
+            asyncio.CancelledError: If shutdown event is set
+        """
+        if self.shutdown_event and self.shutdown_event.is_set():
+            raise asyncio.CancelledError()
+
+    async def sleep(self):
+        """
+        Sleep for a configured delay while checking for shutdown.
+
+        Raises:
+            asyncio.CancelledError: If shutdown is requested during sleep
+        """
+        remaining = delay = self.config.scan.delays.random()
+        steps = 0.1
+        cur_status = self.status.status
+
+        logger.debug(f"Sleeping for {delay} seconds")
+        while True:
+            try:
+                self.check_shutdown()
+                self.status.update(f"[yellow]Sleeping ({remaining})...[/yellow]")
+                await asyncio.sleep(steps)
+                remaining -= steps
+                if remaining <= 0:
+                    break
+            finally:
+                self.status.update(cur_status)
+
     async def run(self, task: Callable[["Application", asyncio.Event], asyncio.Future]):
         """
         Initialize application and run task.

@@ -107,28 +107,6 @@ def interactive(
     app.start(interactive.main)
 
 
-@app.command("test")
-def test_command(
-    ctx: typer.Context,
-):
-    """Development test command."""
-    from rich.box import SIMPLE
-    from rich.columns import Columns
-    from rich.console import Console
-    from rich.layout import Layout
-    from rich.panel import Panel
-    from rich.table import Table
-
-    console = Console()
-
-    table = Table.grid(padding=(1, 5))
-    table.add_column(style="cyan")
-    table.add_column(style="magenta")
-    table.add_row("Item 1", "This is the first item.")
-    table.add_row("Item 2sssssssssss", "This is the second item.")
-    console.print(table)
-
-
 @app.callback()
 def callback(
     ctx: typer.Context,
