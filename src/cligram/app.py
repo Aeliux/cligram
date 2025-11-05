@@ -43,7 +43,7 @@ class Application:
         self.state = StateManager(data_dir=self.config.data_path)
         """"State manager for application state persistence."""
 
-        self.shutdown_event: Optional[asyncio.Event] = None
+        self.shutdown_event: asyncio.Event = asyncio.Event()
         """Event to signal application shutdown."""
 
         self.console = get_console()
@@ -115,6 +115,8 @@ class Application:
         """
         Sleep for a configured delay while checking for shutdown.
 
+        Note: this method is not precise and it is an intended behavior
+
         Raises:
             asyncio.CancelledError: If shutdown is requested during sleep
         """
@@ -134,7 +136,7 @@ class Application:
             finally:
                 self.status.update(cur_status)
 
-    async def run(self, task: Callable[["Application", asyncio.Event], asyncio.Future]):
+    async def run(self, task: Callable[["Application"], asyncio.Future]):
         """
         Initialize application and run task.
         """
@@ -145,7 +147,6 @@ class Application:
             raise RuntimeError("Application instance is already running")
         app_instance = self
 
-        self.shutdown_event = asyncio.Event()
         self.status = Status(
             "Starting application...", console=self.console, spinner="dots"
         )
@@ -168,7 +169,7 @@ class Application:
 
         try:
             self.status.update("Running task...")
-            await task(self, self.shutdown_event)
+            await task(self)
             logger.info("Execution completed successfully")
         except Exception as e:
             logger.error(f"Error during execution: {e}")
@@ -181,7 +182,7 @@ class Application:
             self.status.stop()
             app_instance = None
 
-    def start(self, task: Callable[["Application", asyncio.Event], asyncio.Future]):
+    def start(self, task: Callable[["Application"], asyncio.Future]):
         """
         Start the application event loop and run the specified task.
 

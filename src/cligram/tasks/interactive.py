@@ -359,22 +359,15 @@ def _tryattr(obj, attr: str):
     return str(value) if value is not None else "N/A"
 
 
-async def main(
-    app: Application,
-    shutdown_event: asyncio.Event,
-):
+async def main(app: Application):
     """Interactive task."""
     setup_logger()
 
     app.status.update("Starting interactive session...")
-    await telegram.setup(
-        app=app, shutdown_event=shutdown_event, callback=interactive_callback
-    )
+    await telegram.setup(app=app, callback=interactive_callback)
 
 
-async def interactive_callback(
-    app: Application, shutdown_event: asyncio.Event, client: TelegramClient
-):
+async def interactive_callback(app: Application, client: TelegramClient):
     """Callback for interactive task."""
     app.status.stop()
 
@@ -386,7 +379,7 @@ async def interactive_callback(
     # Input processing loop
     async def process_input():
         input_handler.print_prompt()
-        while not shutdown_event.is_set():
+        while not app.shutdown_event.is_set():
             try:
                 line = await asyncio.wait_for(input_handler.read_input(), timeout=1.0)
 
@@ -427,7 +420,7 @@ async def interactive_callback(
     app.console.print("[dim]Type help for commands, CTRL+C to exit[/dim]")
 
     # Wait for shutdown event
-    await shutdown_event.wait()
+    await app.shutdown_event.wait()
 
     # Cleanup
     input_task.cancel()

@@ -8,3 +8,9 @@ class SessionNotFoundError(Exception):
     """Raised when the specified session file is not found."""
 
     pass
+
+
+class NoWorkingConnectionError(Exception):
+    """Raised when no working connection (direct or proxy) is available."""
+
+    pass

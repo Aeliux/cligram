@@ -6,7 +6,7 @@ from .. import Application, CustomSession, SessionNotFoundError, utils
 from . import telegram
 
 
-async def login(app: Application, shutdown_event: asyncio.Event):
+async def login(app: Application):
     """Login to a new Telegram session."""
     exits = False
     try:
@@ -22,13 +22,9 @@ async def login(app: Application, shutdown_event: asyncio.Event):
     app.status.update("Logging in to Telegram...")
     session: CustomSession = utils.get_session(app.config, create=True)
 
-    await telegram.setup(
-        app=app, shutdown_event=shutdown_event, session=session, callback=login_callback
-    )
+    await telegram.setup(app=app, session=session, callback=login_callback)
 
 
-async def login_callback(
-    app: Application, shutdown_event: asyncio.Event, client: TelegramClient
-):
+async def login_callback(app: Application, client: TelegramClient):
     """Callback for login task."""
     app.console.print("[green]Logged in successfully![/green]")

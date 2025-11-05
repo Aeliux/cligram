@@ -124,9 +124,14 @@ class DelaysConfig:
         Returns:
             float: Random delay duration in seconds
         """
+        delay: float
         if random.random() < self.long.chance:
-            return self.long.random()
-        return self.normal.random()
+            delay = self.long.random()
+        else:
+            delay = self.normal.random()
+
+        delay = round(delay, 1)
+        return delay
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "DelaysConfig":
