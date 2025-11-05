@@ -26,9 +26,15 @@ class InputHandler:
 
     def __init__(self, console: Console):
         self.console = console
-        self.current_input = ""
         self.input_lock = asyncio.Lock()
         self.input_queue = asyncio.Queue()
+
+        self.prompt_text = None
+
+    def print_prompt(self):
+        """Print the input prompt."""
+        prefix = self.prompt_text or ""
+        self.console.print(f"{prefix}> ", end="", highlight=False)
 
     async def read_input(self) -> str:
         """Read a line of input asynchronously."""
@@ -55,17 +61,14 @@ class InputHandler:
     async def print_with_prompt(self, *args, **kwargs):
         """Print output while preserving input prompt."""
         async with self.input_lock:
-            # Clear current line if there's input
-            if self.current_input:
-                self.console.print("\r" + " " * (len(self.current_input) + 2), end="")
-                self.console.print("\r", end="")
+            # Clear current line
+            self.console.print("\r" + " " * self.console.width + "\r", end="")
 
             # Print the message
             self.console.print(*args, **kwargs)
 
-            # Restore prompt and input
-            if self.current_input:
-                self.console.print(f"> {self.current_input}", end="", highlight=False)
+            # Restore prompt
+            self.print_prompt()
 
 
 @dataclass
@@ -86,8 +89,11 @@ class Command:
 class CommandHandler:
     """Handle user commands in interactive mode."""
 
-    def __init__(self, app: Application, client: TelegramClient):
+    def __init__(
+        self, app: Application, input_handler: InputHandler, client: TelegramClient
+    ):
         self.app = app
+        self.input_handler = input_handler
         self.client = client
         self.commands: dict[str, Command] = {}
 
@@ -153,6 +159,9 @@ class CommandHandler:
             command_obj = self.commands[cmd]
             try:
                 parsed = command_obj.parser.parse_args(parts)
+            except argparse.ArgumentError as e:
+                self.app.console.print(f"[red]Argument error:[/red] {e}")
+                return
             except SystemExit:
                 return
             await command_obj.handler(self, parsed)
@@ -253,21 +262,20 @@ async def interactive_callback(
     input_handler = InputHandler(app.console)
     await input_handler.start()
 
-    command_handler = CommandHandler(app, client)
+    command_handler = CommandHandler(app, input_handler, client)
 
     # Input processing loop
     async def process_input():
-        app.console.print("> ", end="", highlight=False)
+        input_handler.print_prompt()
         while not shutdown_event.is_set():
             try:
                 line = await asyncio.wait_for(input_handler.read_input(), timeout=1.0)
-                input_handler.current_input = ""
 
                 if line.strip():
                     await command_handler.handle_command(line.strip())
 
                 # Print new prompt after command is handled
-                app.console.print("> ", end="", highlight=False)
+                input_handler.print_prompt()
 
             except asyncio.TimeoutError:
                 continue
