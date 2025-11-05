@@ -143,8 +143,18 @@ class CommandHandler:
             table.add_column("Field")
             table.add_column("Value")
 
+            bot = isinstance(entity, User) and getattr(entity, "bot", False)
+            group = isinstance(entity, Channel) and (
+                getattr(entity, "megagroup", False)
+                or getattr(entity, "gigagroup", False)
+            )
+
             # Show additional info about this entity
             table.add_row("Type", entity.__class__.__name__)
+            if isinstance(entity, User):
+                table.add_row("Is Bot", str(bot))
+            elif isinstance(entity, Channel):
+                table.add_row("Is Group", str(group))
             table.add_row("Name", utils.get_entity_name(entity))
             table.add_row(
                 "Has Profile Photo", str(utils.telegram.has_profile_photo(entity))
@@ -156,10 +166,11 @@ class CommandHandler:
                 table.add_row("Username", username)
             elif usernames:
                 table.add_row("Usernames", "\n".join([u.username for u in usernames]))
-            if isinstance(entity, User):
+            if isinstance(entity, User) and not bot:
                 table.add_row("Phone", _tryattr(entity, "phone"))
                 table.add_row("Status", utils.get_status(entity))
-                table.add_row("Is Bot", _tryattr(entity, "bot"))
+            if bot:
+                table.add_row("Bot Users", _tryattr(entity, "bot_active_users"))
             table.add_row("Is Verified", _tryattr(entity, "verified"))
             table.add_row("Is Scam", _tryattr(entity, "scam"))
             table.add_row("Is Restricted", _tryattr(entity, "restricted"))
@@ -239,8 +250,8 @@ async def interactive_callback(
         )
 
         # mark message as read
-        await client(
-            functions.messages.ReadHistoryRequest(peer=msg.peer_id, max_id=msg.id)
+        await client.send_read_acknowledge(
+            user, msg.id, clear_mentions=True, clear_reactions=True
         )
 
     # Wait for shutdown event
