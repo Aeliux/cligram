@@ -128,7 +128,9 @@ class Application:
         while True:
             try:
                 self.check_shutdown()
-                self.status.update(f"[yellow]Sleeping ({remaining})...[/yellow]")
+                self.status.update(
+                    f"[yellow]Sleeping ({round(remaining, 1)})...[/yellow]"
+                )
                 await asyncio.sleep(steps)
                 remaining -= steps
                 if remaining <= 0:
