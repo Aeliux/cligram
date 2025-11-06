@@ -3,7 +3,10 @@ import asyncio
 import logging
 import shlex
 import sys
+import traceback
+from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass
+from io import StringIO
 from typing import Awaitable, Callable, List, Optional
 
 from rich.console import Console
@@ -354,6 +357,108 @@ class CommandHandler:
             self.app.console.print(f"[red]Error sending message:[/red] {e}")
 
 
+class PythonExecutor:
+    """Execute Python code in the interactive session context."""
+
+    def __init__(
+        self, app: Application, input_handler: InputHandler, client: TelegramClient
+    ):
+        self.app = app
+        self.input_handler = input_handler
+        self.client = client
+        self.locals = {
+            "app": app,
+            "client": client,
+            "input_handler": input_handler,
+            "console": app.console,
+            "asyncio": asyncio,
+            "logger": logger,
+        }
+        self.globals = {}
+
+    async def execute(self, code: str) -> tuple[bool, str]:
+        """
+        Execute Python code and return (success, output).
+
+        Args:
+            code: Python code to execute
+
+        Returns:
+            Tuple of (success: bool, output: str)
+        """
+        stdout_capture = StringIO()
+        stderr_capture = StringIO()
+
+        try:
+            # Check if this is an expression or statement
+            try:
+                compile(code, "<interactive>", "eval")
+                is_expression = True
+            except SyntaxError:
+                is_expression = False
+
+            with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
+                if is_expression:
+                    # Evaluate expression and print result
+                    result = eval(code, self.globals, self.locals)
+
+                    # Handle awaitable results
+                    if asyncio.iscoroutine(result) or asyncio.isfuture(result):
+                        result = await result
+
+                    if result is not None:
+                        print(repr(result))
+                else:
+                    # Execute statement
+                    exec(code, self.globals, self.locals)
+
+            output = stdout_capture.getvalue()
+            errors = stderr_capture.getvalue()
+
+            full_output = ""
+            if output:
+                full_output += output
+            if errors:
+                full_output += errors
+
+            return True, full_output.rstrip() if full_output else ""
+
+        except Exception as e:
+            error_output = stderr_capture.getvalue()
+            if error_output:
+                error_output += "\n"
+            error_output += "".join(
+                traceback.format_exception(type(e), e, e.__traceback__)
+            )
+            return False, error_output.rstrip()
+
+    async def execute_and_print(self, code: str):
+        """Execute code and print the result to console."""
+        success, output = await self.execute(code)
+
+        if output:
+            if success:
+                await self.input_handler.safe_print(output)
+            else:
+                await self.input_handler.safe_print(f"[red]{output}[/red]")
+        elif not success:
+            await self.input_handler.safe_print(
+                "[red]Execution failed with no output[/red]"
+            )
+
+    def add_variable(self, name: str, value):
+        """Add a variable to the executor's local scope."""
+        self.locals[name] = value
+
+    def get_variable(self, name: str):
+        """Get a variable from the executor's local scope."""
+        return self.locals.get(name)
+
+    def list_variables(self) -> dict:
+        """Get all variables in the executor's local scope."""
+        return {k: v for k, v in self.locals.items() if not k.startswith("_")}
+
+
 def _tryattr(obj, attr: str):
     value = getattr(obj, attr, None)
     return str(value) if value is not None else "N/A"
@@ -375,16 +480,33 @@ async def interactive_callback(app: Application, client: TelegramClient):
     await input_handler.start()
 
     command_handler = CommandHandler(app, input_handler, client)
+    python_executor = PythonExecutor(app, input_handler, client)
+
+    use_executor = False
 
     # Input processing loop
     async def process_input():
+        nonlocal use_executor
+
         input_handler.print_prompt()
         while not app.shutdown_event.is_set():
             try:
                 line = await asyncio.wait_for(input_handler.read_input(), timeout=1.0)
 
                 if line.strip():
-                    await command_handler.handle_command(line.strip())
+                    sline = line.strip()
+
+                    if sline == "!":
+                        use_executor = not use_executor
+                        app.console.print(
+                            f"[dim]Python executor {'enabled' if use_executor else 'disabled'}[/dim]"
+                        )
+                    elif sline.startswith("!"):
+                        await python_executor.execute_and_print(sline[1:])
+                    elif use_executor:
+                        await python_executor.execute_and_print(sline)
+                    else:
+                        await command_handler.handle_command(sline)
 
                 # Print new prompt after command is handled
                 input_handler.print_prompt()
