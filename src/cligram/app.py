@@ -8,10 +8,10 @@ from typing import Callable, Optional
 from rich import get_console
 from rich.status import Status
 
-from .config import Config, ScanMode
+from .config import Config
 from .state_manager import StateManager
 
-logger = None  # Global logger instance
+logger: logging.Logger = None  # type: ignore
 app_instance: Optional["Application"] = None
 _recv_signals: int = 0
 
@@ -48,7 +48,8 @@ class Application:
 
         self.console = get_console()
         """Rich console for formatted output."""
-        self.status: Optional[Status] = None
+
+        self.status: Status = Status("", console=self.console, spinner="dots")
         """Rich status indicator for CLI feedback."""
 
     async def shutdown(self, sig=None):
@@ -149,9 +150,7 @@ class Application:
             raise RuntimeError("Application instance is already running")
         app_instance = self
 
-        self.status = Status(
-            "Starting application...", console=self.console, spinner="dots"
-        )
+        self.status.update("Starting application...")
         self.status.start()
 
         self.console.print(f"[bold green]cligram v{__version__}[/bold green]")

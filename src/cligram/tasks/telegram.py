@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from types import CoroutineType
 from typing import Callable, Optional
 
 from rich.style import Style
@@ -17,7 +18,7 @@ from .. import (
 )
 from ..exceptions import NoWorkingConnectionError
 
-logger = None
+logger: logging.Logger = None  # type: ignore
 
 
 def setup_logger():
@@ -27,9 +28,9 @@ def setup_logger():
 
 async def setup(
     app: Application,
+    callback: Callable[[Application, TelegramClient], CoroutineType],
     session: Optional[CustomSession] = None,
     proxy: Optional[Proxy] = None,
-    callback: Callable[[Application, TelegramClient], asyncio.Future] | None = None,
 ):
     """Setup Telegram client."""
     setup_logger()

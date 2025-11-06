@@ -10,16 +10,15 @@ from dataclasses import dataclass
 from io import StringIO
 from typing import Awaitable, Callable, List, Optional
 
-from rich.console import Console
-from rich.control import Control, ControlType
+from rich.control import Control, ControlType  # type: ignore
 from rich.table import Table
 from telethon import TelegramClient, events, functions, hints
-from telethon.tl.types import Channel, Chat, Message, TypeInputPeer, User, Username
+from telethon.tl.types import Channel, Message, TypeInputPeer, User, Username
 
-from .. import Application, utils
+from .. import Application, InteractiveMode, utils
 from . import telegram
 
-logger = None
+logger: logging.Logger = None  # type: ignore
 
 
 def setup_logger():
@@ -30,17 +29,17 @@ def setup_logger():
 class InputHandler:
     """Handle async input without blocking output or breaking mid-type input."""
 
-    def __init__(self, console: Console):
-        self.console = console
+    def __init__(self, context: "Context"):
+        self.context = context
         self.input_lock = asyncio.Lock()
         self.input_queue = asyncio.Queue()
 
-        self.prompt_text = None
+        self._prompt_text: str | None = None
 
     def print_prompt(self):
         """Print the input prompt."""
-        prefix = self.prompt_text or ""
-        self.console.print(f"{prefix}> ", end="", highlight=False)
+        prefix = self._prompt_text or ""
+        self.context.console.print(f"{prefix}> ", end="", highlight=False)
 
     async def read_input(self) -> str:
         """Read a line of input asynchronously."""
@@ -68,12 +67,12 @@ class InputHandler:
         """Print output while preserving input prompt."""
         async with self.input_lock:
             # Clear current line
-            self.console.control(Control(ControlType.CARRIAGE_RETURN))
-            self.console.print(" " * self.console.width, end="")
-            self.console.control(Control(ControlType.CARRIAGE_RETURN))
+            self.context.console.control(Control(ControlType.CARRIAGE_RETURN))
+            self.context.console.print(" " * self.context.console.width, end="")
+            self.context.console.control(Control(ControlType.CARRIAGE_RETURN))
 
             # Print the message
-            self.console.print(*args, **kwargs)
+            self.context.console.print(*args, **kwargs)
 
 
 @dataclass
@@ -97,12 +96,8 @@ class Command:
 class CommandHandler:
     """Handle user commands in interactive mode."""
 
-    def __init__(
-        self, app: Application, input_handler: InputHandler, client: TelegramClient
-    ):
-        self.app = app
-        self.input_handler = input_handler
-        self.client = client
+    def __init__(self, context: "Context"):
+        self.context = context
         self.selected_entity: Optional[TypeInputPeer] = None
         self.commands: dict[str, Command] = {}
 
@@ -217,15 +212,17 @@ class CommandHandler:
         cmd = parts[0]
 
         if cmd == "help":
-            self.app.console.print("[bold]Available Commands:[/bold]")
+            self.context.console.print("[bold]Available Commands:[/bold]")
             table = Table.grid(padding=(0, 5))
             table.add_column("Command")
             table.add_column("Description")
 
-            for command in self.commands.values():
-                table.add_row(f"[bold]{command.name}[/bold]", command.description)
-            self.app.console.print(table)
-            self.app.console.print(
+            for command_obj in self.commands.values():
+                table.add_row(
+                    f"[bold]{command_obj.name}[/bold]", command_obj.description
+                )
+            self.context.console.print(table)
+            self.context.console.print(
                 "\nType <command> --help for more details on a command."
             )
         elif cmd in self.commands:
@@ -233,15 +230,15 @@ class CommandHandler:
             try:
                 parsed = command_obj.parser.parse_args(parts[1:])
             except argparse.ArgumentError as e:
-                self.app.console.print(f"[red]Argument error:[/red] {e}")
+                self.context.console.print(f"[red]Argument error:[/red] {e}")
                 return
             except SystemExit:
                 return
             await command_obj.handler(self, parsed)
         else:
-            self.app.console.print(f"[dim]Unknown command: {command}[/dim]")
+            self.context.console.print(f"[dim]Unknown command: {command}[/dim]")
 
-    async def get_input_entity(self, query: str | None):
+    async def get_input_entity(self, query: str | int | None):
         """Get input entity from query or selected entity."""
         if query is None:
             if self.selected_entity is None:
@@ -253,23 +250,25 @@ class CommandHandler:
         except ValueError:
             pass
 
-        return await self.client.get_input_entity(query)
+        return await self.context.client.get_input_entity(query)
 
     async def cmd_select(self, _, args: argparse.Namespace):
         """Handler for select command."""
         if not isinstance(args, argparse.Namespace):
-            self.app.console.print("[red]Invalid arguments for select command.[/red]")
+            self.context.console.print(
+                "[red]Invalid arguments for select command.[/red]"
+            )
             return
 
         if args.clear:
             self.selected_entity = None
-            self.input_handler.prompt_text = None
-            self.app.console.print("[green]Selection cleared.[/green]")
+            self.context.set_prompt(source=InteractiveMode.CLIGRAM, prompt=None)
+            self.context.console.print("[green]Selection cleared.[/green]")
             return
 
         entity_query = args.entity
         if not entity_query:
-            self.app.console.print("[red]No entity provided to select.[/red]")
+            self.context.console.print("[red]No entity provided to select.[/red]")
             return
 
         try:
@@ -278,17 +277,19 @@ class CommandHandler:
             if id is None:
                 raise ValueError("Could not determine entity ID.")
             self.selected_entity = ientity
-            self.input_handler.prompt_text = str(id)
-            self.app.console.print(
+            self.context.set_prompt(source=InteractiveMode.CLIGRAM, prompt=str(id))
+            self.context.console.print(
                 f"[green]Entity selected:[/green] {type(ientity).__name__}:{id}"
             )
         except Exception as e:
-            self.app.console.print(f"[red]Error selecting entity:[/red] {e}")
+            self.context.console.print(f"[red]Error selecting entity:[/red] {e}")
 
     async def cmd_resolve(self, _, args: argparse.Namespace):
         """Handler for resolve command."""
         if not isinstance(args, argparse.Namespace):
-            self.app.console.print("[red]Invalid arguments for resolve command.[/red]")
+            self.context.console.print(
+                "[red]Invalid arguments for resolve command.[/red]"
+            )
             return
 
         entity_name = args.entity
@@ -296,8 +297,10 @@ class CommandHandler:
 
         try:
             ientity = await self.get_input_entity(entity_name)
-            entity = await self.client.get_entity(ientity)
-            self.app.console.print(f"[green]Entity resolved:[/green] {entity.id}")
+            entity = await self.context.client.get_entity(ientity)
+            if isinstance(entity, list):
+                entity = entity[0]
+            self.context.console.print(f"[green]Entity resolved:[/green] {entity.id}")
             table = Table.grid(padding=(0, 5))
             table.add_column("Field")
             table.add_column("Value")
@@ -320,7 +323,7 @@ class CommandHandler:
             )
 
             username = getattr(entity, "username", None)
-            usernames: List[Username] = getattr(entity, "usernames", None)
+            usernames: List[Username] = getattr(entity, "usernames", [])
             if username:
                 table.add_row("Username", username)
             elif usernames:
@@ -335,15 +338,15 @@ class CommandHandler:
             table.add_row("Is Restricted", _tryattr(entity, "restricted"))
             if extend:
                 table.add_row("Full Data", entity.stringify())
-            self.app.console.print(table)
+            self.context.console.print(table)
 
         except Exception as e:
-            self.app.console.print(f"[red]Error resolving entity:[/red] {e}")
+            self.context.console.print(f"[red]Error resolving entity:[/red] {e}")
 
     async def cmd_send(self, _, args: argparse.Namespace):
         """Handler for send command."""
         if not isinstance(args, argparse.Namespace):
-            self.app.console.print("[red]Invalid arguments for send command.[/red]")
+            self.context.console.print("[red]Invalid arguments for send command.[/red]")
             return
 
         entity_query = args.entity
@@ -352,36 +355,27 @@ class CommandHandler:
         try:
             ientity = await self.get_input_entity(entity_query)
             id = utils.telegram.get_id_from_input_peer(ientity)
-            await self.client.send_message(ientity, message_text)
-            self.app.console.print(f"[green]Message sent to {id}.[/green]")
+            await self.context.client.send_message(ientity, message_text)
+            self.context.console.print(f"[green]Message sent to {id}.[/green]")
         except Exception as e:
-            self.app.console.print(f"[red]Error sending message:[/red] {e}")
+            self.context.console.print(f"[red]Error sending message:[/red] {e}")
 
 
 class PythonExecutor:
     """Execute Python code in the interactive session context."""
 
-    def __init__(
-        self, app: Application, input_handler: InputHandler, client: TelegramClient
-    ):
-        self.app = app
-        self.input_handler = input_handler
-        self.client = client
+    def __init__(self, context: "Context"):
+        self.context = context
         self.result_history = []
         self.max_history = 100
         self._pending_tasks = {}
         self._task_counter = 0
         self.locals = {
-            "app": app,
-            "client": client,
-            "input_handler": input_handler,
-            "console": app.console,
-            "asyncio": asyncio,
-            "logger": logger,
+            "__context__": self.context,
             "_": None,  # Last result
             "__results__": self.result_history,  # All results
             "a": self._await_helper,  # Helper to await coroutines
-            "tasks": self._pending_tasks,  # Pending tasks
+            "__tasks__": self._pending_tasks,  # Pending tasks
         }
         self.globals = {}
 
@@ -498,9 +492,9 @@ class PythonExecutor:
         success, output = await self.execute(code)
 
         if output:
-            await self.input_handler.safe_print(output)
+            await self.context.input_handler.safe_print(output)
         elif not success:
-            await self.input_handler.safe_print(
+            await self.context.input_handler.safe_print(
                 "[red]Execution failed with no output[/red]"
             )
 
@@ -573,6 +567,203 @@ def _tryattr(obj, attr: str):
     return str(value) if value is not None else "N/A"
 
 
+class Context:
+    """Context for interactive session."""
+
+    @property
+    def mode(self) -> InteractiveMode:
+        """Get the current interactive mode."""
+        return self._mode
+
+    @property
+    def print_announcements(self) -> bool:
+        """Whether to print announcements."""
+        return self._print_announcements
+
+    def __init__(self, app: Application, client: TelegramClient):
+        self.app = app
+        self.console = app.console
+        self.client = client
+
+        self.input_handler = InputHandler(self)
+        self.command_handler = CommandHandler(self)
+        self.executor = PythonExecutor(self)
+
+        self._mode: InteractiveMode = None  # type: ignore
+        self._available_modes = list(InteractiveMode)
+        self._input_processor_task: Optional[asyncio.Task] = None
+        self._print_announcements: bool = True
+        self._cmd_prompt: str | None = None
+        self._missed_announcements: asyncio.Queue = asyncio.Queue()
+
+    async def start(self):
+        """
+        Start the interactive session.
+        """
+        await self.input_handler.start()
+        self._input_processor_task = asyncio.create_task(self._process_input())
+
+        self.console.print("[green]Interactive session started![/green]")
+        self.console.print("[dim]Type ! to toggle modes, CTRL+C to exit[/dim]")
+
+        await self.set_mode(self.app.config.interactive.mode)
+
+    async def stop(self):
+        """
+        Stop the interactive session.
+        """
+
+        if self._input_processor_task:
+            self._input_processor_task.cancel()
+            try:
+                await self._input_processor_task
+            except asyncio.CancelledError:
+                pass
+
+        self.console.print("[green]Interactive session ended[/green]")
+
+    def set_prompt(self, source: InteractiveMode, prompt: str | None):
+        """
+        Set the input prompt for the given interactive mode.
+        """
+
+        if source == InteractiveMode.CLIGRAM:
+            self._cmd_prompt = prompt
+
+        self._update_prompt()
+
+    def _update_prompt(self):
+        if self._mode == InteractiveMode.CLIGRAM:
+            self.input_handler._prompt_text = self._cmd_prompt
+        elif self._mode == InteractiveMode.PYTHON:
+            self.input_handler._prompt_text = "python"
+
+    async def set_mode(self, mode: InteractiveMode):
+        """
+        Set the interactive mode.
+        """
+
+        self._mode = mode
+
+        if self._mode == InteractiveMode.CLIGRAM:
+            self.console.print("[dim]Command mode, type help for commands[/dim]")
+            await self.set_print_announcements(True)
+        elif self._mode == InteractiveMode.PYTHON:
+            self.console.print("[dim]Python executor mode[/dim]")
+            await self.set_print_announcements(False)
+
+        self._update_prompt()
+
+    async def set_print_announcements(self, value: bool):
+        """
+        Enable or disable printing announcements.
+        """
+        if value == self._print_announcements:
+            return
+        self._print_announcements = value
+
+        if self._print_announcements:
+            self.console.print(
+                "[green]Updates announcements enabled, missed announcements will be flushed[/green]"
+            )
+            await self.flush_missed_announcements()
+        else:
+            self.console.print(
+                "[yellow]Updates announcements disabled, updates still logged[/yellow]"
+            )
+
+    async def announce(
+        self,
+        message: str,
+    ):
+        """
+        Announce a message to the user, if announcements are enabled.
+        Otherwise, queue the message for later.
+
+        Args:
+            message: The message to announce.
+        """
+        if not self.print_announcements:
+            await self._missed_announcements.put(message)
+            return
+
+        await self.input_handler.safe_print(message)
+
+        self.input_handler.print_prompt()
+
+    async def flush_missed_announcements(self):
+        """
+        Flush all missed announcements.
+
+        Raises:
+            RuntimeError: If announcements are disabled.
+        """
+        if not self.print_announcements:
+            raise RuntimeError("Updates announcements are disabled.")
+
+        while not self._missed_announcements.empty():
+            message = await self._missed_announcements.get()
+            await self.announce(message)
+
+    async def announce_event(
+        self,
+        event: str,
+        entity: hints.Entity,
+        text: Optional[str] = None,
+    ):
+        """
+        Announce an event from a Telegram entity.
+
+        Args:
+            event: The event name.
+            entity: The Telegram entity involved in the event.
+            text: Optional additional text to include in the announcement.
+        """
+        entity_name = utils.get_entity_name(entity)
+        formatted_event_message = (
+            f"[bold blue]{event}[/bold blue] from [bold green]{entity_name}[/bold green] (ID: {entity.id})"
+            + (f"\n{text}" if text else "")
+        )
+
+        logger.info(
+            f"event '{event}' from {entity_name} (ID: {entity.id})"
+            + (f"\n{text}" if text else "")
+        )
+
+        await self.announce(formatted_event_message)
+
+    async def _process_input(self):
+        self.input_handler.print_prompt()
+        while not self.app.shutdown_event.is_set():
+            try:
+                line = await asyncio.wait_for(
+                    self.input_handler.read_input(), timeout=1.0
+                )
+
+                if not line.strip():
+                    continue
+
+                sline = line.strip()
+
+                if sline == "!":
+                    current_index = self._available_modes.index(self._mode)
+                    next_index = (current_index + 1) % len(self._available_modes)
+                    await self.set_mode(self._available_modes[next_index])
+                elif self.mode == InteractiveMode.PYTHON:
+                    await self.executor.execute_and_print(sline)
+                elif self.mode == InteractiveMode.CLIGRAM:
+                    await self.command_handler.handle_command(sline)
+
+                # Print new prompt after command is handled
+                self.input_handler.print_prompt()
+
+            except asyncio.TimeoutError:
+                continue
+            except Exception as e:
+                self.console.print(f"[red]Error processing input:[/red] {e}")
+                logger.error(f"Error processing input: {e}")
+
+
 async def main(app: Application):
     """Interactive task."""
     setup_logger()
@@ -585,108 +776,35 @@ async def interactive_callback(app: Application, client: TelegramClient):
     """Callback for interactive task."""
     app.status.stop()
 
-    input_handler = InputHandler(app.console)
-    await input_handler.start()
+    context = Context(app, client)
+    await context.start()
 
-    command_handler = CommandHandler(app, input_handler, client)
-    python_executor = PythonExecutor(app, input_handler, client)
-
-    # Add python_executor to its own context for self-reference
-    python_executor.add_variable("executor", python_executor)
-
-    use_executor = False
-
-    # Input processing loop
-    async def process_input():
-        nonlocal use_executor
-
-        input_handler.print_prompt()
-        while not app.shutdown_event.is_set():
-            try:
-                line = await asyncio.wait_for(input_handler.read_input(), timeout=1.0)
-
-                if line.strip():
-                    sline = line.strip()
-
-                    if sline == "!":
-                        use_executor = not use_executor
-                        if use_executor:
-                            input_handler.prompt_text = "python"
-                        app.console.print(
-                            f"[dim]Python executor {'enabled' if use_executor else 'disabled'}[/dim]"
-                        )
-                    elif sline.startswith("!"):
-                        await python_executor.execute_and_print(sline[1:])
-                    elif use_executor:
-                        await python_executor.execute_and_print(sline)
-                    else:
-                        await command_handler.handle_command(sline)
-
-                # Print new prompt after command is handled
-                input_handler.print_prompt()
-
-            except asyncio.TimeoutError:
-                continue
-            except Exception as e:
-                app.console.print(f"[red]Error processing input:[/red] {e}")
-                logger.error(f"Error processing input: {e}")
-
-    # Start input processing
-    input_task = asyncio.create_task(process_input())
-
-    @client.on(events.NewMessage)
+    @client.on(events.NewMessage)  # type: ignore
     async def handler(event: events.NewMessage.Event):
         msg: Message = event.message
-        user = await client.get_entity(msg.peer_id)
-        logger.info(f"From {user.id}\n{msg.message}")
+        entity = await client.get_entity(msg.peer_id)
+        if isinstance(entity, list):
+            entity = entity[0]
 
-        await print_event(
-            input_handler=input_handler,
+        await context.announce_event(
             event="New Message",
-            entity=user,
+            entity=entity,
             text=msg.message,
         )
 
         # mark message as read
         await client(
-            functions.messages.ReadHistoryRequest(peer=msg.peer_id, max_id=msg.id)
+            functions.messages.ReadHistoryRequest(
+                peer=msg.peer_id, max_id=msg.id  # type: ignore
+            )
         )
-
-    app.console.print("[green]Interactive session started![/green]")
-    app.console.print("[dim]Type help for commands, CTRL+C to exit[/dim]")
-    app.console.print("[dim]Type ! to toggle Python executor mode[/dim]")
 
     # Wait for shutdown event
     await app.shutdown_event.wait()
 
-    # Cleanup
-    input_task.cancel()
-    try:
-        await input_task
-    except asyncio.CancelledError:
-        pass
+    await context.stop()
 
     # Remove event handler
     client.remove_event_handler(handler)
 
-    app.console.print("[green]Interactive session ended[/green]")
-
     app.status.start()
-
-
-async def print_event(
-    input_handler: InputHandler,
-    event: str,
-    entity: hints.Entity,
-    text: Optional[str] = None,
-):
-    """Print a Telegram event without breaking user input."""
-    entity_name = utils.get_entity_name(entity)
-
-    await input_handler.safe_print(
-        f"[bold blue]{event}[/bold blue] from [bold green]{entity_name}[/bold green] (ID: {entity.id})"
-    )
-    if text:
-        await input_handler.safe_print(text)
-
-    input_handler.print_prompt()

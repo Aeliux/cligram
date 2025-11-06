@@ -22,7 +22,7 @@ async def login(app: Application):
     app.status.update("Logging in to Telegram...")
     session: CustomSession = utils.get_session(app.config, create=True)
 
-    await telegram.setup(app=app, session=session, callback=login_callback)
+    await telegram.setup(app=app, callback=login_callback, session=session)
 
 
 async def login_callback(app: Application, client: TelegramClient):

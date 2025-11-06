@@ -1,6 +1,6 @@
 from . import utils
 from .app import Application
-from .config import Config, ScanMode
+from .config import Config, InteractiveMode, ScanMode
 from .exceptions import SessionMismatchError, SessionNotFoundError
 from .logger import setup_logger
 from .proxy_manager import Proxy, ProxyManager
@@ -21,6 +21,7 @@ __all__ = [
     "utils",
     "ProxyManager",
     "Proxy",
+    "InteractiveMode",
 ]
 
 __version__ = "0.1.0"

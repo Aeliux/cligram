@@ -2,7 +2,7 @@ import base64
 import hashlib
 import json
 import random
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -335,9 +335,43 @@ class AppConfig:
         }
 
 
+class InteractiveMode(Enum):
+    """Interactive mode options."""
+
+    CLIGRAM = "cligram"
+    """Interactive mode with Cligram commands"""
+
+    PYTHON = "python"
+    """Interactive mode with Python code execution"""
+
+
+@dataclass
+class InteractiveConfig:
+    """Interactive mode configuration."""
+
+    mode: InteractiveMode = InteractiveMode.CLIGRAM
+    """The interactive mode to use"""
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "InteractiveConfig":
+        return cls(
+            mode=InteractiveMode(
+                data.get("mode", cls.__dataclass_fields__["mode"].default.value)
+            )
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "mode": self.mode.value,
+        }
+
+
 @dataclass
 class Config:
     """Application configuration root."""
+
+    app: AppConfig = field(default_factory=AppConfig)
+    """Application behavior settings"""
 
     telegram: TelegramConfig = field(default_factory=TelegramConfig)
     """Telegram client and connection settings"""
@@ -345,8 +379,8 @@ class Config:
     scan: ScanConfig = field(default_factory=ScanConfig)
     """Scanning behavior and timing settings"""
 
-    app: AppConfig = field(default_factory=AppConfig)
-    """Application behavior settings"""
+    interactive: InteractiveConfig = field(default_factory=InteractiveConfig)
+    """Interactive mode settings"""
 
     exclusions: List[str] = field(default_factory=list)
     """List of usernames to exclude from processing"""
@@ -393,11 +427,11 @@ class Config:
 
         # Parse main sections
         config = cls(
+            app=AppConfig.from_dict(original_data.get("app", {})),
             telegram=TelegramConfig.from_dict(original_data.get("telegram", {})),
             scan=ScanConfig.from_dict(original_data.get("scan", {})),
-            app=AppConfig.from_dict(original_data.get("app", {})),
-            exclusions=original_data.get(
-                "exclusions", cls.__dataclass_fields__["exclusions"].default_factory()
+            interactive=InteractiveConfig.from_dict(
+                original_data.get("interactive", {})
             ),
             path=config_full_path,
         )
@@ -446,9 +480,10 @@ class Config:
     def to_dict(self) -> Dict[str, Any]:
         """Export configuration as dictionary."""
         return {
+            "app": self.app.to_dict(),
             "telegram": self.telegram.to_dict(),
             "scan": self.scan.to_dict(),
-            "app": self.app.to_dict(),
+            "interactive": self.interactive.to_dict(),
         }
 
     def save(self, path: Optional[str] = None):
