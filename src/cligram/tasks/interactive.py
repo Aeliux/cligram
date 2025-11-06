@@ -3,6 +3,7 @@ import asyncio
 import logging
 import shlex
 import sys
+import time
 import traceback
 from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass
@@ -366,6 +367,10 @@ class PythonExecutor:
         self.app = app
         self.input_handler = input_handler
         self.client = client
+        self.result_history = []
+        self.max_history = 100
+        self._pending_tasks = {}
+        self._task_counter = 0
         self.locals = {
             "app": app,
             "client": client,
@@ -373,8 +378,59 @@ class PythonExecutor:
             "console": app.console,
             "asyncio": asyncio,
             "logger": logger,
+            "_": None,  # Last result
+            "__results__": self.result_history,  # All results
+            "a": self._await_helper,  # Helper to await coroutines
+            "tasks": self._pending_tasks,  # Pending tasks
         }
         self.globals = {}
+
+    def _get_result(self, index: int = -1):
+        """Get result from history by index (default: last result)."""
+        if not self.result_history:
+            return None
+        try:
+            return self.result_history[index]
+        except IndexError:
+            return None
+
+    def _store_result(self, result):
+        """Store result in history and update quick access variable."""
+        if result is not None:
+            self.result_history.append(result)
+            if len(self.result_history) > self.max_history:
+                self.result_history.pop(0)
+
+            self.locals["_"] = result
+
+    def _await_helper(self, coro):
+        """
+        Helper function to await a coroutine and get its result.
+        Creates a task and returns a TaskAwaiter object that can be used to get the result.
+
+        Usage:
+            task = a(client.get_me())
+            # Later...
+            task.result()  # Get result when done
+            task.done()    # Check if done
+        """
+        if not asyncio.iscoroutine(coro):
+            raise TypeError(f"a() requires a coroutine, got {type(coro).__name__}")
+
+        task_id = self._task_counter
+        self._task_counter += 1
+
+        task = asyncio.create_task(coro)
+        awaiter = TaskAwaiter(task, task_id)
+        self._pending_tasks[task_id] = awaiter
+
+        # Clean up when done
+        def cleanup(t):
+            # Keep in dict for access, but mark as done
+            pass
+
+        task.add_done_callback(cleanup)
+        return awaiter
 
     async def execute(self, code: str) -> tuple[bool, str]:
         """
@@ -397,6 +453,7 @@ class PythonExecutor:
             except SyntaxError:
                 is_expression = False
 
+            result = None
             with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
                 if is_expression:
                     # Evaluate expression and print result
@@ -406,11 +463,15 @@ class PythonExecutor:
                     if asyncio.iscoroutine(result) or asyncio.isfuture(result):
                         result = await result
 
+                    # Store the result
+                    self._store_result(result)
+
                     if result is not None:
                         print(repr(result))
                 else:
                     # Execute statement
-                    exec(code, self.globals, self.locals)
+                    compiled = compile(code, "<interactive>", "exec")
+                    exec(compiled, self.globals, self.locals)
 
             output = stdout_capture.getvalue()
             errors = stderr_capture.getvalue()
@@ -437,10 +498,7 @@ class PythonExecutor:
         success, output = await self.execute(code)
 
         if output:
-            if success:
-                await self.input_handler.safe_print(output)
-            else:
-                await self.input_handler.safe_print(f"[red]{output}[/red]")
+            await self.input_handler.safe_print(output)
         elif not success:
             await self.input_handler.safe_print(
                 "[red]Execution failed with no output[/red]"
@@ -457,6 +515,57 @@ class PythonExecutor:
     def list_variables(self) -> dict:
         """Get all variables in the executor's local scope."""
         return {k: v for k, v in self.locals.items() if not k.startswith("_")}
+
+    def clear_history(self):
+        """Clear result history."""
+        self.result_history.clear()
+        self.locals["_"] = None
+
+
+class TaskAwaiter:
+    """Wrapper for async tasks to allow easy result access."""
+
+    def __init__(self, task: asyncio.Task, task_id: int):
+        self.task = task
+        self.task_id = task_id
+
+    def done(self) -> bool:
+        """Check if the task is done."""
+        return self.task.done()
+
+    def result(self):
+        """
+        Get the result of the task. Blocks if not done yet.
+
+        Returns:
+            The result of the coroutine
+
+        Raises:
+            asyncio.TimeoutError: If timeout is reached
+            Exception: Any exception raised by the coroutine
+        """
+        while not self.task.done():
+            time.sleep(0.1)
+
+        return self.task.result()
+
+    def exception(self):
+        """Get the exception raised by the task, if any."""
+        if not self.task.done():
+            return None
+        return self.task.exception()
+
+    def cancel(self):
+        """Cancel the task."""
+        return self.task.cancel()
+
+    def __repr__(self):
+        status = "done" if self.task.done() else "pending"
+        return f"<TaskAwaiter {self.task_id} ({status})>"
+
+    def __await__(self):
+        """Allow awaiting the TaskAwaiter directly."""
+        return self.task.__await__()
 
 
 def _tryattr(obj, attr: str):
@@ -482,6 +591,9 @@ async def interactive_callback(app: Application, client: TelegramClient):
     command_handler = CommandHandler(app, input_handler, client)
     python_executor = PythonExecutor(app, input_handler, client)
 
+    # Add python_executor to its own context for self-reference
+    python_executor.add_variable("executor", python_executor)
+
     use_executor = False
 
     # Input processing loop
@@ -498,6 +610,8 @@ async def interactive_callback(app: Application, client: TelegramClient):
 
                     if sline == "!":
                         use_executor = not use_executor
+                        if use_executor:
+                            input_handler.prompt_text = "python"
                         app.console.print(
                             f"[dim]Python executor {'enabled' if use_executor else 'disabled'}[/dim]"
                         )
@@ -540,6 +654,7 @@ async def interactive_callback(app: Application, client: TelegramClient):
 
     app.console.print("[green]Interactive session started![/green]")
     app.console.print("[dim]Type help for commands, CTRL+C to exit[/dim]")
+    app.console.print("[dim]Type ! to toggle Python executor mode[/dim]")
 
     # Wait for shutdown event
     await app.shutdown_event.wait()
