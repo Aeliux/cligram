@@ -128,9 +128,9 @@ class ProxyManager:
             ProxyManager instance
         """
         proxy_manager = cls()
-        if config.telegram.direct_connection and not exclude_direct:
+        if config.telegram.connection.direct and not exclude_direct:
             proxy_manager.add_direct_proxy()
-        for proxy in config.telegram.proxies:
+        for proxy in config.telegram.connection.proxies:
             proxy_manager.add_proxy(proxy)
         return proxy_manager
 

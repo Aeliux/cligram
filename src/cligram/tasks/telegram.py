@@ -46,7 +46,9 @@ async def setup(
         try:
             app.check_shutdown()
             await _fetch_account_info(app, client)
-            await _check_unread_messages(app, client)
+
+            if app.config.telegram.startup.count_unread_messages:
+                await _check_unread_messages(app, client)
 
             await callback(app, client)
         finally:

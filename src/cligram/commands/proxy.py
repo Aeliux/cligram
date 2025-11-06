@@ -120,8 +120,8 @@ def add_proxy(
 
     c = 0
     for proxy in pending:
-        if proxy.url not in config.telegram.proxies:
-            config.telegram.proxies.append(proxy.url)
+        if proxy.url not in config.telegram.connection.proxies:
+            config.telegram.connection.proxies.append(proxy.url)
             c += 1
     if c > 0:
         typer.echo(f"Added {c} new proxy(s) to the configuration.")
@@ -195,7 +195,7 @@ def remove_proxy(
     """
     config: Config = ctx.obj["g_load_config"]()
     if all:
-        config.telegram.proxies.clear()
+        config.telegram.connection.proxies.clear()
         typer.echo("Removed all proxies from the configuration.")
         config.save()
         raise typer.Exit()
@@ -213,8 +213,8 @@ def remove_proxy(
         if proxy_url == "direct":
             typer.echo("You must disable direct connection manually in the config.")
             continue
-        if proxy_url in config.telegram.proxies:
-            config.telegram.proxies.remove(proxy_url)
+        if proxy_url in config.telegram.connection.proxies:
+            config.telegram.connection.proxies.remove(proxy_url)
             c += 1
     if c > 0:
         typer.echo(f"Removed {c} proxy(s) from the configuration.")

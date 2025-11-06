@@ -73,7 +73,7 @@ def run(
     if test:
         config.scan.test = True
     if rapid_save:
-        config.app.rapid_save = True
+        config.scan.rapid_save = True
     if mode:
         config.scan.mode = mode
     if session:

@@ -99,7 +99,7 @@ class JsonState(State):
 
             if data is None:
                 self._should_save = True
-                logger.warning(f"[STATE] No data found at {path}")
+                logger.warning(f"No data found at {path}")
                 return
 
             if not isinstance(data, dict):
@@ -129,7 +129,7 @@ class JsonState(State):
             if self.schema:
                 if not self.verify_structure(self.data, self.schema):
                     path = f"{path}.corrupted"
-                    logger.warning(f"[STATE] Invalid structure, saving to {path}")
+                    logger.warning(f"Invalid structure, saving to {path}")
             self._atomic_save(path)
             self._should_save = False
             self._last_hash = self.get_hash()
@@ -183,12 +183,12 @@ class JsonState(State):
         if isinstance(schema, dict):
             if not isinstance(data, dict):
                 logger.warning(
-                    f"[STATE] Structure mismatch at {path or 'root'}: expected dict, got {type(data).__name__}"
+                    f"Structure mismatch at {path or 'root'}: expected dict, got {type(data).__name__}"
                 )
                 return False
             for key, subschema in schema.items():
                 if key not in data:
-                    logger.warning(f"[STATE] Missing key '{key}' at {path or 'root'}")
+                    logger.warning(f"Missing key '{key}' at {path or 'root'}")
                     return False
                 if not cls.verify_structure(
                     data[key], subschema, path=f"{path}.{key}" if path else key
@@ -198,7 +198,7 @@ class JsonState(State):
         elif isinstance(schema, list):
             if not isinstance(data, list):
                 logger.warning(
-                    f"[STATE] Structure mismatch at {path or 'root'}: expected list, got {type(data).__name__}"
+                    f"Structure mismatch at {path or 'root'}: expected list, got {type(data).__name__}"
                 )
                 return False
             if schema:
@@ -210,12 +210,12 @@ class JsonState(State):
         elif isinstance(schema, type):
             if not isinstance(data, schema):
                 logger.warning(
-                    f"[STATE] Type mismatch at {path or 'root'}: expected {schema.__name__}, got {type(data).__name__}"
+                    f"Type mismatch at {path or 'root'}: expected {schema.__name__}, got {type(data).__name__}"
                 )
                 return False
             return True
         else:
-            logger.warning(f"[STATE] Unknown schema type at {path or 'root'}: {schema}")
+            logger.warning(f"Unknown schema type at {path or 'root'}: {schema}")
             return False
 
 
@@ -415,55 +415,53 @@ class StateManager:
 
     def load(self):
         """Load all states from disk."""
-        logger.info("[STATE] Loading state...")
+        logger.info("Loading state...")
         for name, state in self.states.items():
             try:
                 if state.changed():
-                    logger.warning(
-                        f"[STATE] {name} state has unsaved changes, skipping load"
-                    )
+                    logger.warning(f"{name} state has unsaved changes, skipping load")
                     continue
                 filepath = self._get_state_path(name)
                 state.load(str(filepath))
-                logger.info(f"[STATE] Loaded {name} state")
+                logger.info(f"Loaded {name} state")
             except Exception as e:
-                logger.warning(f"[STATE] Failed to load {name} state: {e}")
+                logger.warning(f"Failed to load {name} state: {e}")
 
     async def save(self):
         """Save changed states to disk."""
         changed = False
         async with self.lock:
-            logger.info("[STATE] Saving state...")
+            logger.info("Saving state...")
             for name, state in self.states.items():
                 if state.changed():
                     try:
                         filepath = self._get_state_path(name)
                         state.save(str(filepath))
                         changed = True
-                        logger.debug(f"[STATE] Saved {name} state")
+                        logger.debug(f"Saved {name} state")
                     except Exception as e:
-                        logger.error(f"[STATE] Failed to save {name} state: {e}")
+                        logger.error(f"Failed to save {name} state: {e}")
 
         if changed:
-            logger.info("[STATE] All states saved")
+            logger.info("All states saved")
             self._need_backup = True
         else:
-            logger.debug("[STATE] No changes detected")
+            logger.debug("No changes detected")
 
     async def backup(self):
         """Create backup of all registered states."""
         if not self._need_backup:
-            logger.debug("[BACKUP] No changes detected, skipping backup")
+            logger.debug("No changes detected, skipping backup")
             return
 
         if not self.backup_dir:
-            logger.warning("[BACKUP] No backup directory configured")
+            logger.warning("No backup directory configured")
             return
         if self.backup_dir.is_file():
-            logger.error("[BACKUP] Invalid backup directory")
+            logger.error("Invalid backup directory")
             return
 
-        logger.info("[BACKUP] Creating backup of all states...")
+        logger.info("Creating backup of all states...")
 
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -472,55 +470,53 @@ class StateManager:
 
             for name, state in self.states.items():
                 if state.changed():
-                    logger.warning(
-                        f"[BACKUP] {name} state has unsaved changes, skipping backup"
-                    )
+                    logger.warning(f"{name} state has unsaved changes, skipping backup")
                     continue
 
                 src = self._get_state_path(name)
                 if src.exists():
                     dest = backup_path / f"{name}.json"
                     shutil.copy2(src, dest)
-                    logger.debug(f"[BACKUP] Backed up {name}")
+                    logger.debug(f"Backed up {name}")
 
-            logger.info(f"[BACKUP] All states backed up to {backup_path}")
+            logger.info(f"All states backed up to {backup_path}")
             self._need_backup = False
         except Exception as e:
-            logger.error(f"[BACKUP] Failed to create backup: {e}")
+            logger.error(f"Failed to create backup: {e}")
 
     async def restore(self, timestamp: str = None):
         """Restore all states from backup."""
         if not self.backup_dir:
-            logger.error("[RESTORE] No backup directory configured")
+            logger.error("No backup directory configured")
             return
         if self.backup_dir.is_file():
-            logger.error("[RESTORE] Invalid backup directory")
+            logger.error("Invalid backup directory")
             return
         if not self.backup_dir.exists():
-            logger.error("[RESTORE] Backup directory does not exist")
+            logger.error("Backup directory does not exist")
             return
 
         backup_base = self.backup_dir
         if not timestamp:
             backups = [p for p in backup_base.iterdir() if p.is_dir()]
             if not backups:
-                logger.error("[RESTORE] No backups found")
+                logger.error("No backups found")
                 return
             backup_path = max(backups, key=lambda p: p.name)
         else:
             backup_path = backup_base / timestamp
             if not backup_path.exists():
-                logger.error(f"[RESTORE] Backup {timestamp} does not exist")
+                logger.error(f"Backup {timestamp} does not exist")
                 return
 
-        logger.info(f"[RESTORE] Restoring states from {backup_path.name}...")
+        logger.info(f"Restoring states from {backup_path.name}...")
 
         try:
             restored = 0
             for name, state in self.states.items():
                 if state.changed():
                     logger.warning(
-                        f"[RESTORE] {name} state has unsaved changes, skipping restore"
+                        f"{name} state has unsaved changes, skipping restore"
                     )
                     continue
                 backup = backup_path / f"{name}.json"
@@ -528,17 +524,15 @@ class StateManager:
                 if backup.exists():
                     shutil.copy2(backup, target)
                     restored += 1
-                    logger.debug(f"[RESTORE] Restored {name}")
+                    logger.debug(f"Restored {name}")
 
             if restored > 0:
                 self.load()
-                logger.info(
-                    f"[RESTORE] Restored {restored} states from {backup_path.name}"
-                )
+                logger.info(f"Restored {restored} states from {backup_path.name}")
             else:
-                logger.warning("[RESTORE] No states restored")
+                logger.warning("No states restored")
         except Exception as e:
-            logger.error(f"[RESTORE] Failed to restore: {e}")
+            logger.error(f"Failed to restore: {e}")
 
     states: Dict[str, State]
     """Registry of state handlers by name"""

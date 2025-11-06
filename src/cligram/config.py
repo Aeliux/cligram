@@ -195,6 +195,9 @@ class ScanConfig:
     test: bool = False
     """Test mode without sending messages"""
 
+    rapid_save: bool = False
+    """Enable rapid state saving to disk"""
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ScanConfig":
         return cls(
@@ -207,6 +210,9 @@ class ScanConfig:
             ),
             limit=data.get("limit", cls.__dataclass_fields__["limit"].default),
             test=data.get("test", cls.__dataclass_fields__["test"].default),
+            rapid_save=data.get(
+                "rapid_save", cls.__dataclass_fields__["rapid_save"].default
+            ),
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -216,45 +222,92 @@ class ScanConfig:
             "targets": self.targets,
             "limit": self.limit,
             "test": self.test,
+            "rapid_save": self.rapid_save,
         }
 
 
 @dataclass
-class TelegramConfig:
-    """Telegram client connection settings."""
+class ConnectionConfig:
+    """Connection settings for Telegram client."""
 
-    api: ApiConfig = field(default_factory=ApiConfig)
-    """API credentials from my.telegram.org"""
-
-    session: str = "default"
-    """Session file name for persistent authorization"""
+    direct: bool = True
+    """Whether to allow direct connection"""
 
     proxies: List[str] = field(default_factory=list)
     """List of proxy URLs to try for connection"""
 
-    direct_connection: bool = True
-    """Whether to allow direct connection"""
-
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "TelegramConfig":
+    def from_dict(cls, data: Dict[str, Any]) -> "ConnectionConfig":
         return cls(
-            api=ApiConfig.from_dict(data.get("api", {})),
-            session=data.get("session", cls.__dataclass_fields__["session"].default),
+            direct=data.get(
+                "direct",
+                cls.__dataclass_fields__["direct"].default,
+            ),
             proxies=data.get(
                 "proxies", cls.__dataclass_fields__["proxies"].default_factory()
-            ),
-            direct_connection=data.get(
-                "direct_connection",
-                cls.__dataclass_fields__["direct_connection"].default,
             ),
         )
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "api": self.api.to_dict(),
-            "session": self.session,
+            "direct": self.direct,
             "proxies": self.proxies,
-            "direct_connection": self.direct_connection,
+        }
+
+
+@dataclass
+class StartupConfig:
+    """Telegram client startup settings."""
+
+    count_unread_messages: bool = True
+    """Show unread messages count on startup"""
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "StartupConfig":
+        return cls(
+            count_unread_messages=data.get(
+                "count_unread_messages",
+                cls.__dataclass_fields__["count_unread_messages"].default,
+            ),
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "count_unread_messages": self.count_unread_messages,
+        }
+
+
+@dataclass
+class TelegramConfig:
+    """Telegram client settings."""
+
+    api: ApiConfig = field(default_factory=ApiConfig)
+    """API credentials from my.telegram.org"""
+
+    connection: ConnectionConfig = field(default_factory=ConnectionConfig)
+    """Connection settings"""
+
+    startup: StartupConfig = field(default_factory=StartupConfig)
+    """Startup behavior settings"""
+
+    session: str = "default"
+    """Session file name for persistent authorization"""
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "TelegramConfig":
+        return cls(
+            api=ApiConfig.from_dict(data.get("api", {})),
+            connection=ConnectionConfig.from_dict(data.get("connection", {})),
+            startup=StartupConfig.from_dict(data.get("startup", {})),
+            session=data.get("session", cls.__dataclass_fields__["session"].default),
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "api": self.api.to_dict(),
+            "connection": self.connection.to_dict(),
+            "startup": self.startup.to_dict(),
+            "session": self.session,
         }
 
 
@@ -268,24 +321,17 @@ class AppConfig:
     verbose: bool = False
     """Enable debug logging"""
 
-    rapid_save: bool = False
-    """Enable rapid state saving to disk"""
-
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "AppConfig":
         return cls(
             delays=DelaysConfig.from_dict(data.get("delays", {})),
             verbose=data.get("verbose", cls.__dataclass_fields__["verbose"].default),
-            rapid_save=data.get(
-                "rapid_save", cls.__dataclass_fields__["rapid_save"].default
-            ),
         )
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "delays": self.delays.to_dict(),
             "verbose": self.verbose,
-            "rapid_save": self.rapid_save,
         }
 
 
@@ -364,7 +410,7 @@ class Config:
         # Check if config structure changed (new fields added)
         new_data = config.to_dict()
         if not cls._config_equal(original_data, new_data):
-            config._update_config(original_data, new_data)
+            config._update_config(original_data)
             config.updated = True
 
         if not cls.get_config(raise_if_failed=False):
@@ -549,8 +595,16 @@ class Config:
         # Compare keys only
         return set(flat_old.keys()) == set(flat_new.keys())
 
-    def _update_config(self, old_data: Dict[str, Any], new_data: Dict[str, Any]):
+    def _update_config(self, old_data: Dict[str, Any]):
         # Migrate existing config keys to new structure
+        if old_data.get("app", {}).get("rapid_save") is not None:
+            self.scan.rapid_save = old_data["app"]["rapid_save"]
+        if old_data.get("telegram", {}).get("proxies") is not None:
+            self.telegram.connection.proxies = old_data["telegram"]["proxies"]
+        if old_data.get("telegram", {}).get("direct_connection") is not None:
+            self.telegram.connection.direct = old_data["telegram"]["direct_connection"]
+
+        new_data = self.to_dict()
 
         # Create backup
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

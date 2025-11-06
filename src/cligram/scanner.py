@@ -317,7 +317,7 @@ class TelegramScanner:
                 if await self.process_user(client, user, saved_msgs):
                     sent += 1
                     self.state.users.eligible.discard(username)
-                    if self.config.app.rapid_save:
+                    if self.config.scan.rapid_save:
                         await self.state.save()
                 else:
                     skipped += 1
@@ -541,7 +541,7 @@ class TelegramScanner:
                 )
                 if await self.process_user(client, user, saved_msgs):
                     processed += 1
-                    if self.config.app.rapid_save:
+                    if self.config.scan.rapid_save:
                         await self.state.save()
                     # Only delay every N successful processes in scan mode
                     if self.config.scan.mode != ScanMode.SCAN or processed % 20 == 0:
