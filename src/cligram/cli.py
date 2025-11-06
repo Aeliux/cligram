@@ -107,6 +107,14 @@ def interactive(
     app.start(interactive.main)
 
 
+@app.command("version")
+def version():
+    """Display the current version of cligram."""
+    from . import __version__
+
+    typer.echo(f"cligram version: {__version__}")
+
+
 @app.callback()
 def callback(
     ctx: typer.Context,
