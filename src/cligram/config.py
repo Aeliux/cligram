@@ -411,7 +411,7 @@ class Config:
             if not isinstance(c, cls):
                 raise TypeError("Configuration instance is of incorrect type.")
 
-        return c if isinstance(c, cls) else None
+        return c if isinstance(c, cls) else None  # type: ignore
 
     @classmethod
     def from_file(

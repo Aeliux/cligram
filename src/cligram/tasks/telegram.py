@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from types import CoroutineType
 from typing import Callable, Optional
@@ -63,7 +62,7 @@ async def setup(
 
             await client(functions.account.UpdateStatusRequest(offline=True))
 
-            await client.disconnect()
+            await client.disconnect()  # type: ignore
             logger.info("Client session closed")
 
     except SessionNotFoundError as e:
@@ -168,12 +167,12 @@ async def _init_client(
     )
 
     app.status.update("Logging in...")
-    logger.info(f"Logging in with {client.session.filename} session")
+    logger.info(f"Logging in with {client.session.filename} session")  # type: ignore
 
     def _phone_callback():
         app.status.stop()
         return input("Please enter your phone (or bot token): ")
 
-    await client.start(phone=_phone_callback)
+    await client.start(phone=_phone_callback)  # type: ignore
     app.status.start()
     return client

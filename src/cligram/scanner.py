@@ -3,7 +3,7 @@ import logging
 import random
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from rich.style import Style
 from telethon import TelegramClient, errors, events, functions
@@ -17,7 +17,7 @@ from .exceptions import SessionNotFoundError
 from .proxy_manager import ProxyManager
 from .state_manager import StateManager
 
-logger = None  # Will be initialized later
+logger: logging.Logger = None  # type: ignore
 
 
 class TelegramScanner:

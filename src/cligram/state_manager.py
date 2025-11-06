@@ -10,9 +10,9 @@ from argparse import ArgumentError
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Optional, Set, TypeVar
 
-logger = None  # Will be initialized later
+logger: logging.Logger = None  # type: ignore
 
 
 class State(ABC):
@@ -47,6 +47,9 @@ class State(ABC):
     def changed(self) -> bool:
         """Check if state changed since last save."""
         pass
+
+
+StateT = TypeVar("StateT", bound=State)
 
 
 class JsonState(State):
@@ -406,10 +409,13 @@ class StateManager:
         """Get full path for state file."""
         return self.data_dir / f"{name}.json"
 
-    def register(self, name: str, state: State) -> State:
+    def register(self, name: str, state: StateT) -> StateT:
         """Register a new state type."""
+        if not isinstance(state, State):
+            raise TypeError("State must be an instance of State")
+
         if name in self.states:
-            raise ArgumentError(f"State '{name}' is already registered")
+            raise ArgumentError(None, f"State '{name}' is already registered")
         self.states[name] = state
         return state
 
@@ -484,7 +490,7 @@ class StateManager:
         except Exception as e:
             logger.error(f"Failed to create backup: {e}")
 
-    async def restore(self, timestamp: str = None):
+    async def restore(self, timestamp: Optional[str] = None):
         """Restore all states from backup."""
         if not self.backup_dir:
             logger.error("No backup directory configured")
