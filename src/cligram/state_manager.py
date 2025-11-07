@@ -55,100 +55,71 @@ StateT = TypeVar("StateT", bound=State)
 class JsonState(State):
     """
     JSON-based state persistence implementation.
-
-    Features:
-    - Atomic file operations
-    - Schema validation
-    - Change tracking
-    - Data corruption detection
-    - Set/list type conversion
     """
+
+    data: Dict[str, Any]
+    """Current state data"""
+
+    schema: Optional[Dict[str, Any]]
+    """Optional schema for data validation"""
 
     def __init__(self):
         self._default_data: Dict[str, Any] = getattr(self, "_default_data", {})
         self.data: Dict[str, Any] = copy.deepcopy(self._default_data)
-        self.schema: Optional[Dict[str, Any]] = None
-        self.corrupted: bool = False
-        self._should_save: bool = False
+        self.schema: Optional[Dict[str, Any]] = getattr(self, "schema", None)
+        self._new_state: bool = False
         self._last_hash = self.get_hash()
-
-    def _sets_to_lists(self, data: Any) -> Any:
-        """
-        Convert set objects to lists for JSON serialization.
-
-        Args:
-            data: Data structure containing sets
-
-        Returns:
-            Data structure with sets converted to lists
-        """
-        if isinstance(data, dict):
-            return {k: self._sets_to_lists(v) for k, v in data.items()}
-        elif isinstance(data, set):
-            return list(data)
-        elif isinstance(data, list):
-            return [self._sets_to_lists(item) for item in data]
-        return data
 
     def load(self, path: str) -> None:
         """Load state data from JSON file."""
         if self.changed():
             raise RuntimeError("Cannot load state with unsaved changes")
 
-        data = None
+        data = self._read_json(path)
 
-        try:
-            data = self._read_json(path)
+        if data is None:
+            self._new_state = True
+            logger.warning(f"No data found at {path}")
+            return
 
-            if data is None:
-                self._should_save = True
-                logger.warning(f"No data found at {path}")
-                return
-
-            if not isinstance(data, dict):
-                raise ValueError(
-                    f"Invalid data format in {path}: expected dict, got {type(data).__name__}"
-                )
-        except:
-            self.corrupted = True
-            raise
+        if not isinstance(data, dict):
+            raise ValueError(
+                f"Invalid data format in {path}: expected dict, got {type(data).__name__}"
+            )
 
         # merge with default data
         data = copy.deepcopy(self._default_data) | data
 
-        if self.schema:
-            if not self.verify_structure(data, self.schema):
-                self.corrupted = True
-                raise ValueError(f"Invalid structure in {path}")
+        self.ensure_schema(data)
         self.data = data
         self._last_hash = self.get_hash()
 
     def save(self, path: str) -> None:
         """Save state data to JSON file."""
-        if self.corrupted:
-            raise RuntimeError("Cannot save corrupted state")
-
         if self.changed():
-            if self.schema:
-                if not self.verify_structure(self.data, self.schema):
-                    path = f"{path}.corrupted"
-                    logger.warning(f"Invalid structure, saving to {path}")
+            self.ensure_schema(self.data)
             self._atomic_save(path)
-            self._should_save = False
+            self._new_state = False
             self._last_hash = self.get_hash()
 
     def changed(self) -> bool:
         """Check if state data has changed since last save."""
-        return not self.corrupted and (
-            self._should_save
+        return (
+            self._new_state
             or self._last_hash is None
             or self.get_hash() != self._last_hash
         )
 
+    def ensure_schema(self, data: Dict[str, Any]) -> None:
+        """Ensure current data matches schema."""
+        if self.schema:
+            if not self.verify_structure(data, self.schema):
+                raise ValueError("State data does not match schema")
+
     def get_hash(self) -> str:
         """Get a hash of the current state data."""
         m = hashlib.sha256()
-        json_data = self._sets_to_lists(self.data)
+        json_data = JsonState._sets_to_lists(self.data)
         m.update(json.dumps(json_data, sort_keys=True).encode("utf-8"))
         return m.hexdigest()
 
@@ -165,11 +136,11 @@ class JsonState(State):
         tmp = f"{path}.tmp"
         try:
             # Convert sets to lists before saving
-            json_data = self._sets_to_lists(self.data)
+            json_data = JsonState._sets_to_lists(self.data)
             with open(tmp, "w") as f:
                 json.dump(json_data, f, indent=2)
             os.replace(tmp, path)
-        except Exception:
+        except Exception:  # pragma: no cover
             if os.path.exists(tmp):
                 os.unlink(tmp)
             raise
@@ -220,6 +191,25 @@ class JsonState(State):
         else:
             logger.warning(f"Unknown schema type at {path or 'root'}: {schema}")
             return False
+
+    @staticmethod
+    def _sets_to_lists(data: Any) -> Any:
+        """
+        Convert set objects to lists for JSON serialization.
+
+        Args:
+            data: Data structure containing sets
+
+        Returns:
+            Data structure with sets converted to lists
+        """
+        if isinstance(data, dict):
+            return {k: JsonState._sets_to_lists(v) for k, v in data.items()}
+        elif isinstance(data, set):
+            return list(data)
+        elif isinstance(data, list):
+            return [JsonState._sets_to_lists(item) for item in data]
+        return data
 
 
 class UsersState(JsonState):
@@ -301,20 +291,6 @@ class GroupInfo:
         ):
             self._parent._update_group_data(self.id, name, value)
 
-    def update(self) -> None:
-        """
-        Update the group info in the parent GroupsState.
-
-        This method is called to ensure the parent state is updated
-        with the current values of this GroupInfo instance.
-        """
-        if self._parent is not None:
-            self._parent.update(self)
-        else:
-            raise ReferenceError(
-                "Cannot update GroupInfo without parent GroupsState reference"
-            )
-
 
 class GroupsState(JsonState):
     """
@@ -351,21 +327,6 @@ class GroupsState(JsonState):
         group = GroupInfo(id=group_id, _parent=self, **data)
         self._groups[group_id] = group
         return group
-
-    def update(self, group: GroupInfo) -> None:
-        """
-        Update or add a group.
-
-        Args:
-            group: GroupInfo instance with updated data
-        """
-        if not isinstance(group, GroupInfo):
-            raise TypeError("Expected GroupInfo instance")
-
-        self._groups[group.id] = group
-        for key, value in group.__dict__.items():
-            if key not in ["id", "_parent"]:
-                self._update_group_data(group.id, key, value)
 
 
 class StateManager:
@@ -423,15 +384,9 @@ class StateManager:
         """Load all states from disk."""
         logger.info("Loading state...")
         for name, state in self.states.items():
-            try:
-                if state.changed():
-                    logger.warning(f"{name} state has unsaved changes, skipping load")
-                    continue
-                filepath = self._get_state_path(name)
-                state.load(str(filepath))
-                logger.info(f"Loaded {name} state")
-            except Exception as e:
-                logger.warning(f"Failed to load {name} state: {e}")
+            filepath = self._get_state_path(name)
+            state.load(str(filepath))
+            logger.info(f"Loaded {name} state")
 
     async def save(self):
         """Save changed states to disk."""
@@ -440,13 +395,10 @@ class StateManager:
             logger.info("Saving state...")
             for name, state in self.states.items():
                 if state.changed():
-                    try:
-                        filepath = self._get_state_path(name)
-                        state.save(str(filepath))
-                        changed = True
-                        logger.debug(f"Saved {name} state")
-                    except Exception as e:
-                        logger.error(f"Failed to save {name} state: {e}")
+                    filepath = self._get_state_path(name)
+                    state.save(str(filepath))
+                    changed = True
+                    logger.debug(f"Saved {name} state")
 
         if changed:
             logger.info("All states saved")
@@ -461,84 +413,67 @@ class StateManager:
             return
 
         if not self.backup_dir:
-            logger.warning("No backup directory configured")
-            return
+            raise ValueError("No backup directory configured")
         if self.backup_dir.is_file():
-            logger.error("Invalid backup directory")
-            return
+            raise ValueError("Invalid backup directory")
 
         logger.info("Creating backup of all states...")
 
-        try:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            backup_path = self.backup_dir / timestamp
-            backup_path.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_path = self.backup_dir / timestamp
+        backup_path.mkdir(parents=True, exist_ok=True)
 
-            for name, state in self.states.items():
-                if state.changed():
-                    logger.warning(f"{name} state has unsaved changes, skipping backup")
-                    continue
+        for name, state in self.states.items():
+            if state.changed():
+                raise RuntimeError(f"Cannot backup state with unsaved changes: {name}")
 
-                src = self._get_state_path(name)
-                if src.exists():
-                    dest = backup_path / f"{name}.json"
-                    shutil.copy2(src, dest)
-                    logger.debug(f"Backed up {name}")
+            src = self._get_state_path(name)
+            if src.exists():
+                dest = backup_path / f"{name}.json"
+                shutil.copy2(src, dest)
+                logger.debug(f"Backed up {name}")
 
-            logger.info(f"All states backed up to {backup_path}")
-            self._need_backup = False
-        except Exception as e:
-            logger.error(f"Failed to create backup: {e}")
+        logger.info(f"All states backed up to {backup_path}")
+        self._need_backup = False
 
     async def restore(self, timestamp: Optional[str] = None):
         """Restore all states from backup."""
         if not self.backup_dir:
-            logger.error("No backup directory configured")
-            return
+            raise ValueError("No backup directory configured")
         if self.backup_dir.is_file():
-            logger.error("Invalid backup directory")
-            return
+            raise ValueError("Invalid backup directory")
         if not self.backup_dir.exists():
-            logger.error("Backup directory does not exist")
-            return
+            raise ValueError("Backup directory does not exist")
 
         backup_base = self.backup_dir
         if not timestamp:
             backups = [p for p in backup_base.iterdir() if p.is_dir()]
             if not backups:
-                logger.error("No backups found")
-                return
+                raise ValueError("No backups found")
             backup_path = max(backups, key=lambda p: p.name)
         else:
             backup_path = backup_base / timestamp
             if not backup_path.exists():
-                logger.error(f"Backup {timestamp} does not exist")
-                return
+                raise ValueError(f"Backup {timestamp} does not exist")
 
         logger.info(f"Restoring states from {backup_path.name}...")
 
-        try:
-            restored = 0
-            for name, state in self.states.items():
-                if state.changed():
-                    logger.warning(
-                        f"{name} state has unsaved changes, skipping restore"
-                    )
-                    continue
-                backup = backup_path / f"{name}.json"
-                target = self._get_state_path(name)
-                if backup.exists():
-                    shutil.copy2(backup, target)
-                    restored += 1
-                    logger.debug(f"Restored {name}")
+        restored = 0
+        for name, state in self.states.items():
+            if state.changed():
+                raise RuntimeError(f"Cannot restore state with unsaved changes: {name}")
+            backup = backup_path / f"{name}.json"
+            target = self._get_state_path(name)
+            if backup.exists():
+                shutil.copy2(backup, target)
+                restored += 1
+                logger.debug(f"Restored {name}")
 
-            if restored > 0:
-                self.load()
-                logger.info(f"Restored {restored} states from {backup_path.name}")
-            else:
-                logger.warning("No states restored")
-        except Exception as e:
-            logger.error(f"Failed to restore: {e}")
+        if restored > 0:
+            self.load()
+            logger.info(f"Restored {restored} states from {backup_path.name}")
+        else:
+            logger.warning("No states restored")
 
     states: Dict[str, State]
     """Registry of state handlers by name"""

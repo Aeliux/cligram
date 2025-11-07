@@ -1,6 +1,71 @@
+import logging
+from argparse import ArgumentError
+
 import pytest
 
-from cligram.state_manager import GroupsState, StateManager, UsersState
+from cligram.state_manager import GroupsState, JsonState, StateManager, UsersState
+
+
+# setup function
+@pytest.fixture(scope="function", autouse=True)
+def setup_logging():
+    """Setup logging for tests."""
+    from cligram import state_manager
+
+    state_manager.logger = logging.getLogger("cligram.state_manager")
+    state_manager.logger.setLevel(logging.FATAL)
+
+
+class DummyState(JsonState):
+    def __init__(self):
+        self._default_data = {"key": "value"}
+        self.schema = {"key": str}
+
+        super().__init__()
+
+
+def test_state_schema_validation(temp_dir):
+    """Test schema validation in JsonState."""
+    state_file = temp_dir / "dummy.json"
+
+    state = DummyState()
+    state.data["key"] = "valid_string"
+    state.save(str(state_file))
+
+    # Load valid data
+    new_state = DummyState()
+    new_state.load(str(state_file))
+    assert new_state.data["key"] == "valid_string"
+
+    # Corrupt the file with invalid data
+    with open(state_file, "w") as f:
+        f.write('{"key": 123}')  # Invalid type
+
+    corrupted_state = DummyState()
+    with pytest.raises(ValueError):
+        corrupted_state.load(str(state_file))
+    assert corrupted_state.data == corrupted_state._default_data
+
+
+def test_load_invalid_state(temp_dir):
+    """Test loading invalid state file."""
+    state_file = temp_dir / "invalid.json"
+
+    # Write invalid JSON
+    with open(state_file, "w") as f:
+        f.write('{"invalid_json": }')
+
+    state = DummyState()
+    with pytest.raises(ValueError):
+        state.load(str(state_file))
+    assert state.data == state._default_data
+
+    with open(state_file, "w") as f:
+        f.write("[1, 2, 3]")  # Invalid structure
+
+    state2 = DummyState()
+    with pytest.raises(ValueError):
+        state2.load(str(state_file))
 
 
 def test_users_state_initialization():
@@ -19,21 +84,30 @@ def test_users_state_save_load(temp_dir):
 
     # Create and populate state
     state = UsersState()
+    assert not state.changed()
     state.messaged.add(123)
     state.messaged.add(456)
     state.eligible.add("test_user")
+    assert state.changed()
 
     # Save
     state.save(str(state_file))
+    assert not state.changed()
     assert state_file.exists()
 
     # Load into new state
     new_state = UsersState()
     new_state.load(str(state_file))
+    assert not new_state.changed()
 
     assert 123 in new_state.messaged
     assert 456 in new_state.messaged
     assert "test_user" in new_state.eligible
+
+    state.messaged.add(789)
+    assert state.changed()
+    with pytest.raises(RuntimeError):
+        state.load(str(state_file))  # Should raise due to unsaved changes
 
 
 def test_users_state_changed(temp_dir):
@@ -71,6 +145,8 @@ def test_groups_state_update_group():
     group = state.get("group_456")
     group.max = 1000
     group.min = 500
+    with pytest.raises(AttributeError):
+        group.id = "new_id"  # id should be read-only
 
     # Retrieve again
     retrieved = state.get("group_456")
@@ -84,6 +160,7 @@ def test_groups_state_save_load(temp_dir):
 
     # Create and populate
     state = GroupsState()
+    assert not state.changed()
     group1 = state.get("group_1")
     group1.max = 2000
     group1.min = 1000
@@ -91,8 +168,12 @@ def test_groups_state_save_load(temp_dir):
     group2 = state.get("group_2")
     group2.max = 5000
 
+    assert state.changed()
+
     # Save
     state.save(str(state_file))
+
+    assert not state.changed()
 
     # Load
     new_state = GroupsState()
@@ -104,6 +185,15 @@ def test_groups_state_save_load(temp_dir):
 
     loaded_group2 = new_state.get("group_2")
     assert loaded_group2.max == 5000
+    assert not new_state.changed()
+
+    loaded_group3 = new_state.get("group_3")
+    assert not new_state.changed()  # No changes yet
+    loaded_group3.max = 3000
+    assert new_state.changed()
+
+    with pytest.raises(RuntimeError):
+        new_state.load(str(state_file))  # Should raise due to unsaved changes
 
 
 def test_state_manager_initialization(state_dir):
@@ -153,8 +243,59 @@ async def test_state_manager_load(state_dir):
 
 
 @pytest.mark.asyncio
-async def test_state_manager_backup(state_dir):
-    """Test backup creation."""
+async def test_state_manager_load_with_unsaved_changes(state_dir):
+    """Test loading state with unsaved changes raises error."""
+    manager = StateManager(str(state_dir))
+    manager.users.messaged.add(333)
+
+    # Save initial state
+    await manager.save()
+
+    # Modify state without saving
+    manager.users.eligible.add("unsaved_user")
+
+    with pytest.raises(RuntimeError):
+        manager.load()  # Should raise due to unsaved changes
+
+
+@pytest.mark.asyncio
+async def test_state_manager_register_state(state_dir):
+    """Test registering a new state in StateManager."""
+    manager = StateManager(str(state_dir))
+
+    custom_state = DummyState()
+    manager.register("custom", custom_state)
+
+    assert "custom" in manager.states
+    assert manager.states["custom"] is custom_state
+
+    custom_state.data["key"] = "new_value"
+
+    await manager.save()
+
+    new_manager = StateManager(str(state_dir))
+    new_manager.register("custom", DummyState())
+    new_manager.load()
+    assert new_manager.states["custom"].data["key"] == "new_value"  # type: ignore
+
+    new_manager.states["custom"].data["key"] = "another_value"  # type: ignore
+    await new_manager.save()
+
+    reloaded_manager = StateManager(str(state_dir))
+    reloaded_manager.register("custom2", DummyState())
+    reloaded_manager.load()
+    assert reloaded_manager.states["custom2"].data["key"] == "value"
+
+    with pytest.raises(ArgumentError):
+        manager.register("users", UsersState())  # Already registered
+
+    with pytest.raises(TypeError):
+        manager.register("invalid", "not_a_state")  # type: ignore
+
+
+@pytest.mark.asyncio
+async def test_state_manager_backup_restore(state_dir):
+    """Test backup creation and restoration."""
     manager = StateManager(str(state_dir))
     manager.users.messaged.add(333)
     await manager.save()
@@ -167,3 +308,18 @@ async def test_state_manager_backup(state_dir):
     # Check backup contains timestamp directory
     backups = list(backup_dir.iterdir())
     assert len(backups) > 0
+
+    new_manager = StateManager(state_dir / "restored", backup_dir=backup_dir)
+    assert not new_manager.users.messaged  # Empty before restore
+
+    await new_manager.restore()
+    await new_manager.save()
+
+    assert 333 in new_manager.users.messaged  # Restored data
+    assert not new_manager.users.changed()
+
+    loaded_manager = StateManager(state_dir / "restored")
+    assert not loaded_manager.users.messaged
+
+    loaded_manager.load()
+    assert 333 in loaded_manager.users.messaged  # Data persists after load
