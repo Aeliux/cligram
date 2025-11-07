@@ -129,21 +129,23 @@ class TelegramScanner:
 
         try:
             # Check if group is already an ID
-            gid = int(group)
+            gid_int = int(group)
             logger.debug(f"[GROUP] {group} is already an ID")
-            return str(gid)
+            return str(gid_int)
         except ValueError:
             pass
 
         try:
             entity = await client.get_entity(group)
+            if isinstance(entity, list):
+                entity = entity[0]
             gid = str(entity.id)
             self._cached_ids[group] = gid
             logger.debug(f"[GROUP] Resolved {group} to ID {gid}")
             return gid
         except Exception as e:
             logger.error(f"[GROUP] Failed to resolve {group}: {e}")
-            return None
+            raise
 
     async def human_delay(self, shutdown_event: Optional[asyncio.Event] = None):
         """
@@ -228,10 +230,10 @@ class TelegramScanner:
                 return False
 
             if self.config.scan.mode == ScanMode.SCAN:
-                if username and username in self.state.users.eligible:
+                if username in self.state.users.eligible:
                     logger.debug(f"[SKIP] User {username} already eligible")
                     return False
-                self.state.users.eligible.add(username)
+                self.state.users.eligible.add(username)  # type: ignore
                 logger.info(f"[DONE] Added username {username} to eligible list")
                 return True
 
@@ -277,6 +279,8 @@ class TelegramScanner:
                 f"[ERROR] Failed to process user {uid} ({e.__class__.__name__}): {str(e)}"
             )
             raise
+
+        return False
 
     async def send_mode(
         self,

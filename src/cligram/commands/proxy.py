@@ -34,7 +34,7 @@ def _get_proxy_host(proxy: Proxy, use_url: bool) -> str:
 
 async def run_tests(
     proxy_manager: ProxyManager,
-    shutdown_event: asyncio.Event,
+    shutdown_event: asyncio.Event | None = None,
     use_url: bool = False,
     timeout: float = 30.0,
 ):
@@ -60,9 +60,7 @@ async def run_tests(
 
             style = Style(
                 color=(
-                    "red"
-                    if not result.success
-                    else "green" if result.latency < 1000 else None
+                    "red" if not result.success else "green" if result.is_good else None
                 )
             )
 
@@ -194,22 +192,28 @@ def remove_proxy(
     Remove a proxy from the configuration.
     """
     config: Config = ctx.obj["g_load_config"]()
+
+    unreachable_proxies: List[str] = []
+
     if all:
         config.telegram.connection.proxies.clear()
         typer.echo("Removed all proxies from the configuration.")
         config.save()
         raise typer.Exit()
-    c = 0
+
     if unreachable:
         proxy_manager = ProxyManager.from_config(config, exclude_direct=True)
         results: list[ProxyTestResult] = asyncio.run(
             run_tests(proxy_manager, shutdown_event=None, use_url=False)
         )
-        proxy_url: List[str] = [
+        unreachable_proxies = [
             result.proxy.url for result in results if not result.success
         ]
-        typer.echo(f"Found {len(proxy_url)} unreachable proxy(s).")
-    for proxy_url in url:
+        typer.echo(f"Found {len(unreachable_proxies)} unreachable proxy(s).")
+
+    c = 0
+    target_urls = set(url + unreachable_proxies)
+    for proxy_url in target_urls:
         if proxy_url == "direct":
             typer.echo("You must disable direct connection manually in the config.")
             continue

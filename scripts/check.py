@@ -5,7 +5,7 @@
 
 import sys
 
-from common import PROJECT_ROOT, TARGETS, print_summary, run_command
+from common import TARGETS, print_summary, run_command
 
 
 def check_black() -> bool:
@@ -27,7 +27,7 @@ def check_ruff() -> bool:
 
 def check_mypy() -> bool:
     """Run mypy type checker."""
-    return run_command(["mypy", "src"], "MyPy type checking")
+    return run_command(["mypy", "src", "--pretty"], "MyPy type checking")
 
 
 def check_bandit() -> bool:

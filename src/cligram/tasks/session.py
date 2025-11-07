@@ -1,5 +1,3 @@
-import asyncio
-
 from telethon import TelegramClient
 
 from .. import Application, CustomSession, SessionNotFoundError, utils
@@ -8,14 +6,14 @@ from . import telegram
 
 async def login(app: Application):
     """Login to a new Telegram session."""
-    exits = False
+    exists = False
     try:
-        session: CustomSession = utils.get_session(app.config, create=False)
-        exits = True
+        utils.get_session(app.config, create=False)
+        exists = True
     except SessionNotFoundError:
         pass
 
-    if exits:
+    if exists:
         app.console.print("[red]Session already exists.[/red]")
         return
 

@@ -1,9 +1,7 @@
 import hashlib
 import logging
-import re
 from logging import FileHandler
 from pathlib import Path
-from typing import Optional
 
 
 class ColoredNameFormatter(logging.Formatter):
@@ -29,14 +27,14 @@ class ColoredNameFormatter(logging.Formatter):
     ]
 
     def __init__(self, fmt=None, datefmt=None, style="%"):
-        super().__init__(fmt, datefmt, style)
+        super().__init__(fmt, datefmt, style)  # type: ignore
         self._color_cache = {}
 
     def _get_color_for_name(self, name: str) -> str:
         """Get consistent color for a logger name using hash."""
         if name not in self._color_cache:
             # Use hash to consistently map names to colors
-            hash_value = int(hashlib.md5(name.encode()).hexdigest(), 16)
+            hash_value = int(hashlib.md5(name.encode()).hexdigest(), 16)  # nosec
             color_index = hash_value % len(self.COLORS)
             self._color_cache[name] = self.COLORS[color_index]
         return self._color_cache[name]
@@ -54,7 +52,7 @@ class ColoredNameFormatter(logging.Formatter):
         return result
 
 
-def setup_logger(verbose: bool = False, log_file: str = "cligram.log"):
+def setup_logger(verbose: bool = False, log_file: str | Path = "cligram.log"):
     logging.basicConfig(
         level=logging.DEBUG,
     )

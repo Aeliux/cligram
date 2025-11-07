@@ -1,8 +1,6 @@
-import json
-
 import pytest
 
-from cligram.state_manager import GroupInfo, GroupsState, StateManager, UsersState
+from cligram.state_manager import GroupsState, StateManager, UsersState
 
 
 def test_users_state_initialization():

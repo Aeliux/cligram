@@ -3,7 +3,7 @@ import logging
 import platform
 import signal
 import sys
-from typing import Callable, Optional
+from typing import Callable, Coroutine, Optional
 
 from rich import get_console
 from rich.status import Status
@@ -97,7 +97,7 @@ class Application:
             for sig in (signal.SIGTERM, signal.SIGINT):
                 try:
                     asyncio.get_event_loop().add_signal_handler(
-                        sig, lambda s=sig: asyncio.create_task(self.shutdown(s))
+                        sig, lambda s=sig: asyncio.create_task(self.shutdown(s))  # type: ignore
                     )
                 except NotImplementedError:
                     logger.warning(f"Failed to set handler for signal {sig}")
@@ -139,7 +139,7 @@ class Application:
             finally:
                 self.status.update(cur_status)
 
-    async def run(self, task: Callable[["Application"], asyncio.Future]):
+    async def run(self, task: Callable[["Application"], Coroutine]):
         """
         Initialize application and run task.
         """
@@ -184,7 +184,7 @@ class Application:
             self.status.stop()
             app_instance = None
 
-    def start(self, task: Callable[["Application"], asyncio.Future]):
+    def start(self, task: Callable[["Application"], Coroutine]):
         """
         Start the application event loop and run the specified task.
 

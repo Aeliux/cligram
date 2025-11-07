@@ -379,7 +379,7 @@ class StateManager:
     - Creating backups of state files
     """
 
-    def __init__(self, data_dir: str, backup_dir: Optional[str] = None):
+    def __init__(self, data_dir: str | Path, backup_dir: Optional[str | Path] = None):
         """
         Initialize the state manager.
 

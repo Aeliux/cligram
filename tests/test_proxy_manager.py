@@ -1,5 +1,3 @@
-import pytest
-
 from cligram.proxy_manager import Proxy, ProxyManager, ProxyType
 
 

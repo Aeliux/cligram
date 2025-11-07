@@ -16,6 +16,7 @@ dependencies = [
     "typer (>=0.20.0,<0.21.0)",
     "pysocks (>=1.7.1,<2.0.0)",
     "rich (>=14.2.0,<15.0.0)",
+    "rsa (>=4.9.1,<5.0.0)",
 ]
 keywords = ["telegram", "cli", "bot", "automation", "messaging"]
 classifiers = [
@@ -28,6 +29,9 @@ classifiers = [
     "Topic :: Internet",
     "Typing :: Typed",
 ]
+
+[project.scripts]
+cligram = "cligram.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/Aeliux/cligram"
@@ -65,9 +69,6 @@ dev = [
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
-
-[tool.poetry.scripts]
-cligram = "cligram.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -117,3 +118,8 @@ profile = "black"
 
 [tool.ruff]
 line-length = 88
+
+[tool.mypy]
+files = ["src"]
+ignore_missing_imports = true
+check_untyped_defs = true

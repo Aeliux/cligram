@@ -1993,13 +1993,14 @@ jupyter = ["ipywidgets (>=7.5.1,<9)"]
 
 [[package]]
 name = "rsa"
-version = "4.2"
+version = "4.9.1"
 description = "Pure-Python RSA implementation"
 optional = false
-python-versions = "*"
+python-versions = "<4,>=3.6"
 groups = ["main"]
 files = [
-    {file = "rsa-4.2.tar.gz", hash = "sha256:aaefa4b84752e3e99bd8333a2e1e3e7a7da64614042bd66f775573424370108a"},
+    {file = "rsa-4.9.1-py3-none-any.whl", hash = "sha256:68635866661c6836b8d39430f97a996acbd61bfa49406748ea243539fe239762"},
+    {file = "rsa-4.9.1.tar.gz", hash = "sha256:e7bdbfdb5497da4c07dfd35530e1a902659db6ff241e39d9953cad06ebd0ae75"},
 ]
 
 [package.dependencies]
@@ -2434,4 +2435,4 @@ speedups = ["aiohttp", "cryptg", "ujson"]
 [metadata]
 lock-version = "2.1"
 python-versions = "<4.0,>=3.13"
-content-hash = "98f2f08583fb4b0753fb9cbc5d2baa8787ec0d03b96a451f51ec34239d34903f"
+content-hash = "528d2ad82f9c917a12f4bde4e0bbeac010b62a6cacd49a563ab6e405a63cc9f0"

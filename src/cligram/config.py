@@ -6,9 +6,10 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 GLOBAL_CONFIG_DIR = Path.home() / ".cligram"
+_config_instance: Optional["Config"] = None
 
 
 class ScanMode(Enum):
@@ -186,7 +187,7 @@ class ScanConfig:
     mode: ScanMode = ScanMode.FULL
     """Operation mode"""
 
-    targets: List[str] = field(default_factory=list)
+    targets: List[str] = field(default_factory=list)  # type: ignore
     """List of target groups to scan (usernames or URLs)"""
 
     limit: int = 50
@@ -206,7 +207,7 @@ class ScanConfig:
                 data.get("mode", cls.__dataclass_fields__["mode"].default.value)
             ),
             targets=data.get(
-                "targets", cls.__dataclass_fields__["targets"].default_factory()
+                "targets", cls.__dataclass_fields__["targets"].default_factory()  # type: ignore
             ),
             limit=data.get("limit", cls.__dataclass_fields__["limit"].default),
             test=data.get("test", cls.__dataclass_fields__["test"].default),
@@ -233,7 +234,7 @@ class ConnectionConfig:
     direct: bool = True
     """Whether to allow direct connection"""
 
-    proxies: List[str] = field(default_factory=list)
+    proxies: List[str] = field(default_factory=list)  # type: ignore
     """List of proxy URLs to try for connection"""
 
     @classmethod
@@ -244,7 +245,7 @@ class ConnectionConfig:
                 cls.__dataclass_fields__["direct"].default,
             ),
             proxies=data.get(
-                "proxies", cls.__dataclass_fields__["proxies"].default_factory()
+                "proxies", cls.__dataclass_fields__["proxies"].default_factory()  # type: ignore
             ),
         )
 
@@ -404,18 +405,19 @@ class Config:
     @classmethod
     def get_config(cls, raise_if_failed: bool = True) -> "Config":
         """Get application configurations."""
-        c = getattr(cls, "_config_instance", None)
         if raise_if_failed:
-            if c is None:
+            if _config_instance is None:
                 raise RuntimeError("Configuration not loaded. Call from_file() first.")
-            if not isinstance(c, cls):
+            if not isinstance(_config_instance, cls):
                 raise TypeError("Configuration instance is of incorrect type.")
 
-        return c if isinstance(c, cls) else None  # type: ignore
+        return _config_instance if isinstance(_config_instance, cls) else None  # type: ignore
 
     @classmethod
     def from_file(
-        cls, config_path: str = "config.json", overrides: Optional[List[str]] = None
+        cls,
+        config_path: str | Path = "config.json",
+        overrides: Optional[List[str]] = None,
     ) -> "Config":
         """Load configuration from JSON file with CLI overrides."""
         config_full_path = Path(config_path).resolve()
@@ -448,7 +450,8 @@ class Config:
             config.updated = True
 
         if not cls.get_config(raise_if_failed=False):
-            cls._config_instance = config
+            global _config_instance
+            _config_instance = config
 
         return config
 
@@ -486,7 +489,7 @@ class Config:
             "interactive": self.interactive.to_dict(),
         }
 
-    def save(self, path: Optional[str] = None):
+    def save(self, path: Optional[Path | str] = None):
         """Save configuration to JSON file."""
         save_path = Path(path) if path else self.path
         save_path.parent.mkdir(parents=True, exist_ok=True)
@@ -606,7 +609,7 @@ class Config:
         Returns:
             Flattened dictionary with dot notation keys
         """
-        items = []
+        items: List[Tuple[str, Any]] = []
         for k, v in d.items():
             new_key = f"{parent_key}{sep}{k}" if parent_key else k
             if isinstance(v, dict):

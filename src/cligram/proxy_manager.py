@@ -1,15 +1,13 @@
 import asyncio
 import base64
-import logging
 import re
 import time
 from dataclasses import dataclass
 from enum import Enum
-from logging import Logger
 from typing import List, Optional, Tuple
 
 import socks
-from telethon import TelegramClient
+from telethon import TelegramClient, sessions
 from telethon.network import ConnectionTcpMTProxyRandomizedIntermediate
 
 from .config import Config
@@ -185,7 +183,7 @@ class ProxyManager:
         secret += "=" * ((4 - len(secret) % 4) % 4)
         try:
             return base64.b64decode(secret).hex()
-        except:
+        except Exception:
             return secret
 
     def _parse_proxy_url(self, proxy_url: str) -> Optional[Proxy]:
@@ -258,7 +256,7 @@ class ProxyManager:
         ]
 
         if not candidates:
-            return None
+            return []
 
         results = await test_proxies(
             candidates, timeout=timeout, shutdown_event=shutdown_event, oneshot=oneshot
@@ -290,6 +288,11 @@ class ProxyTestResult:
         if not self.success:
             return float("inf")
         return self.latency or float("inf")
+
+    @property
+    def is_good(self) -> bool:
+        """Check if the proxy test was successful."""
+        return self.success and (self.latency is not None and self.latency < 1000)
 
 
 async def ping_mtproto(
@@ -366,6 +369,7 @@ async def _test_telegram_connection(
 ) -> Tuple[bool, Optional[float], Optional[str]]:
     """Helper function to test Telegram connection with or without proxy."""
     start = time.time()
+    client = None
 
     try:
         # Create temporary client for testing
@@ -382,7 +386,7 @@ async def _test_telegram_connection(
             kwargs["proxy"] = proxy
 
         client = TelegramClient(
-            None,  # Memory session
+            None,  # Memory session  # type: ignore
             1,  # Dummy API ID
             "0" * 32,  # Dummy API hash
             **kwargs,
@@ -408,13 +412,18 @@ async def _test_telegram_connection(
         error = str(e)
     finally:
         try:
-            if isinstance(proxy, Proxy) and proxy.type == ProxyType.DIRECT:
-                proxy.host = client.session.server_address
-                proxy.port = client.session.port
-                proxy.url = f"dc:{client.session.dc_id}"
-
-            await client.disconnect()
-        except:
+            if isinstance(client, TelegramClient):
+                if (
+                    isinstance(proxy, Proxy)
+                    and proxy.type == ProxyType.DIRECT
+                    and isinstance(client.session, sessions.Session)
+                ):
+                    proxy.host = client.session.server_address
+                    proxy.port = client.session.port
+                    proxy.url = f"dc:{client.session.dc_id}"
+                if client.is_connected():
+                    await client.disconnect()  # type: ignore
+        except Exception:
             pass
 
     latency = (time.time() - start) * 1000 if success else None

@@ -1,6 +1,5 @@
 import logging
-from types import CoroutineType
-from typing import Callable, Optional
+from typing import Callable, Coroutine, Optional
 
 from rich.style import Style
 from telethon import TelegramClient
@@ -27,7 +26,7 @@ def setup_logger():
 
 async def setup(
     app: Application,
-    callback: Callable[[Application, TelegramClient], CoroutineType],
+    callback: Callable[[Application, TelegramClient], Coroutine],
     session: Optional[CustomSession] = None,
     proxy: Optional[Proxy] = None,
 ):

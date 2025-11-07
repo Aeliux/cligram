@@ -8,7 +8,7 @@ import traceback
 from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass
 from io import StringIO
-from typing import Awaitable, Callable, List, Optional
+from typing import Any, Awaitable, Callable, List, Optional
 
 from rich.control import Control, ControlType  # type: ignore
 from rich.table import Table
@@ -32,7 +32,7 @@ class InputHandler:
     def __init__(self, context: "Context"):
         self.context = context
         self.input_lock = asyncio.Lock()
-        self.input_queue = asyncio.Queue()
+        self.input_queue: asyncio.Queue[str] = asyncio.Queue()
 
         self._prompt_text: str | None = None
 
@@ -366,18 +366,18 @@ class PythonExecutor:
 
     def __init__(self, context: "Context"):
         self.context = context
-        self.result_history = []
+        self.result_history: list[Any] = []
         self.max_history = 100
-        self._pending_tasks = {}
+        self._pending_tasks: dict[int, TaskAwaiter] = {}
         self._task_counter = 0
-        self.locals = {
+        self.locals: dict[str, Any] = {
             "__context__": self.context,
             "_": None,  # Last result
             "__results__": self.result_history,  # All results
             "a": self._await_helper,  # Helper to await coroutines
             "__tasks__": self._pending_tasks,  # Pending tasks
         }
-        self.globals = {}
+        self.globals: dict[str, Any] = {}
 
     def _get_result(self, index: int = -1):
         """Get result from history by index (default: last result)."""
@@ -451,7 +451,7 @@ class PythonExecutor:
             with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
                 if is_expression:
                     # Evaluate expression and print result
-                    result = eval(code, self.globals, self.locals)
+                    result = eval(code, self.globals, self.locals)  # nosec
 
                     # Handle awaitable results
                     if asyncio.iscoroutine(result) or asyncio.isfuture(result):
@@ -465,7 +465,7 @@ class PythonExecutor:
                 else:
                     # Execute statement
                     compiled = compile(code, "<interactive>", "exec")
-                    exec(compiled, self.globals, self.locals)
+                    exec(compiled, self.globals, self.locals)  # nosec
 
             output = stdout_capture.getvalue()
             errors = stderr_capture.getvalue()

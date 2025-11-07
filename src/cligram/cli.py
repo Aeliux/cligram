@@ -1,9 +1,9 @@
-import json
 import time
 from pathlib import Path
 from typing import List, Optional
 
 import typer
+from click import FileError
 
 from . import commands
 from .app import Application
@@ -69,21 +69,24 @@ def run(
     ),
 ):
     """Telegram message scanner and forwarder."""
-    config: Config = ctx.obj["g_load_config"]()
-    if test:
-        config.scan.test = True
-    if rapid_save:
-        config.scan.rapid_save = True
-    if mode:
-        config.scan.mode = mode
-    if session:
-        config.telegram.session = session
-    if limit is not None:
-        config.scan.limit = limit
-    if exclude:
-        config.exclusions = json.load(exclude.open("r"))
-    app = Application(config=config)
-    app.start()
+    typer.echo("The 'run' command is currently under development.")
+    typer.Exit(1)
+
+    # config: Config = ctx.obj["g_load_config"]()
+    # if test:
+    #     config.scan.test = True
+    # if rapid_save:
+    #     config.scan.rapid_save = True
+    # if mode:
+    #     config.scan.mode = mode
+    # if session:
+    #     config.telegram.session = session
+    # if limit is not None:
+    #     config.scan.limit = limit
+    # if exclude:
+    #     config.exclusions = json.load(exclude.open("r"))
+    # app = Application(config=config)
+    # app.start()
 
 
 @app.command("interactive")
@@ -118,7 +121,7 @@ def version():
 @app.callback()
 def callback(
     ctx: typer.Context,
-    config: Path = typer.Option(
+    config: Optional[Path] = typer.Option(
         None,
         "-c",
         "--config",
@@ -127,8 +130,8 @@ def callback(
     verbose: bool = typer.Option(
         False, "-v", "--verbose", help="Enable detailed debug logging output to console"
     ),
-    overrides: Optional[List[str]] = typer.Option(
-        None,
+    overrides: List[str] = typer.Option(
+        [],
         "-o",
         "--override",
         help="Override config values using dot notation (e.g., app.verbose=true)",
@@ -146,6 +149,9 @@ def callback(
             return Config.get_config()
 
         config = config or find_config_file(raise_error=True)
+        if not config:
+            raise FileError("Configuration file not found.")
+
         loaded_config = Config.from_file(config, overrides=overrides)
         if verbose:
             loaded_config.app.verbose = True
