@@ -15,6 +15,7 @@ def test_session_initialization_memory():
     """Test creating memory-only session."""
     session = CustomSession(None)
     assert session is not None
+    session.close()
 
 
 def test_session_not_found():

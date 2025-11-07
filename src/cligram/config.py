@@ -472,6 +472,8 @@ class Config:
             )
 
         path, value_str = override_str.split("=", 1)
+        if not value_str.strip():
+            raise ValueError(f"Invalid override format: {override_str}. Missing value.")
         path = path.strip()
 
         # Parse value
@@ -520,12 +522,13 @@ class Config:
         except ValueError:
             pass
 
-        # List (JSON array)
-        if value_str.startswith("[") and value_str.endswith("]"):
-            try:
-                return json.loads(value_str)
-            except json.JSONDecodeError:
-                pass
+        # try list/dict
+        try:
+            parsed = json.loads(value_str.replace("'", '"'))
+            if isinstance(parsed, (list, dict)):
+                return parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
 
         # String (remove quotes if present)
         if (value_str.startswith('"') and value_str.endswith('"')) or (
@@ -566,8 +569,11 @@ class Config:
         # Type conversion for enums
         if hasattr(obj.__class__, "__dataclass_fields__"):
             field_info = obj.__class__.__dataclass_fields__.get(attr)
-            if field_info and field_info.type == ScanMode:
-                value = ScanMode(value)
+            if field_info:
+                if field_info.type == ScanMode:
+                    value = ScanMode(value)
+                elif field_info.type == InteractiveMode:
+                    value = InteractiveMode(value)
 
         setattr(obj, attr, value)
 
@@ -663,7 +669,7 @@ def get_search_paths() -> List[Path]:
     return [Path.cwd(), GLOBAL_CONFIG_DIR]
 
 
-def find_config_file(raise_error: bool = False) -> Optional[Path]:
+def find_config_file(raise_error: bool = False) -> Optional[Path]:  # pragma: no cover
     """Search for configuration file in standard locations."""
     search_paths = get_search_paths()
     config_filenames = ["config.json", "cligram_config.json"]

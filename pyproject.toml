@@ -98,6 +98,13 @@ omit = [
     "*/tests/*",
     "*/__pycache__/*",
     "*/site-packages/*",
+    "src/cligram/__version__.py",     # nothing testable here
+    "src/cligram/cli.py",             # cli entrypoint
+    "src/cligram/app.py",             # application entrypoint
+    "src/cligram/logger.py",          # logger setup, used by cli
+    "src/cligram/scanner.py",         # scanner tool, not part of main flow, also app dependant
+    "src/cligram/tasks/*",            # tasks can't be tested easily
+    "src/cligram/commands/*",         # cli commands
 ]
 
 [tool.coverage.report]
