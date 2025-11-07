@@ -15,6 +15,7 @@ dependencies = [
     "python-socks[asyncio] (>=2.7.2,<3.0.0)",
     "typer (>=0.20.0,<0.21.0)",
     "pysocks (>=1.7.1,<2.0.0)",
+    "rich (>=14.2.0,<15.0.0)",
 ]
 keywords = ["telegram", "cli", "bot", "automation", "messaging"]
 classifiers = [
@@ -56,6 +57,8 @@ dev = [
     "python-dotenv (>=1.2.1,<2.0.0)",
     "ruff (>=0.14.3,<0.15.0)",
     "pre-commit (>=4.3.0,<5.0.0)",
+    "pytest-asyncio (>=1.2.0,<2.0.0)",
+    "pytest-cov (>=7.0.0,<8.0.0)",
 ]
 
 
@@ -65,3 +68,52 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
 cligram = "cligram.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--verbose",
+    "--tb=short",
+    "--disable-warnings",
+    "--strict-markers",
+    "--cov=cligram",
+    "--cov-report=html",
+    "--cov-report=term-missing",
+]
+markers = [
+    "asyncio: marks tests as async",
+    "slow: marks tests as slow",
+    "integration: marks tests as integration tests",
+]
+
+
+[tool.coverage.run]
+source = ["src/cligram"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/site-packages/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]
+
+[tool.black]
+line-length = 88
+
+[tool.isort]
+profile = "black"
+
+[tool.ruff]
+line-length = 88
