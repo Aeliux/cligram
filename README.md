@@ -2,7 +2,7 @@
 
 A powerful CLI-based Telegram client for automated message forwarding and group scanning, built with Python and Telethon.
 
-[![Python Version](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
+[![Python Version](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Overview
@@ -23,7 +23,7 @@ Cligram is designed for small-scale university survey advertising and message di
 
 ### Requirements
 
-- Python 3.13 or higher
+- Python 3.12 or higher
 - Telegram API credentials (API ID and Hash from [my.telegram.org](https://my.telegram.org/apps))
 
 ### Install

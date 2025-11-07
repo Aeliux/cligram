@@ -171,6 +171,7 @@ files = [
 
 [package.dependencies]
 frozenlist = ">=1.1.0"
+typing-extensions = {version = ">=4.2", markers = "python_version < \"3.13\""}
 
 [[package]]
 name = "attrs"
@@ -1794,6 +1795,7 @@ files = [
 
 [package.dependencies]
 pytest = ">=8.2,<9"
+typing-extensions = {version = ">=4.12", markers = "python_version < \"3.13\""}
 
 [package.extras]
 docs = ["sphinx (>=5.3)", "sphinx-rtd-theme (>=1)"]
@@ -2434,5 +2436,5 @@ speedups = ["aiohttp", "cryptg", "ujson"]
 
 [metadata]
 lock-version = "2.1"
-python-versions = "<4.0,>=3.13"
-content-hash = "528d2ad82f9c917a12f4bde4e0bbeac010b62a6cacd49a563ab6e405a63cc9f0"
+python-versions = "<4.0,>=3.12"
+content-hash = "b2fbe65138a8c1d330076e5e0e98b554e076eb297d1086fbe53b00950d052c51"
