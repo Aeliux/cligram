@@ -5,7 +5,7 @@ from typing import List, Optional
 import typer
 from click import FileError
 
-from . import commands
+from . import commands, utils
 from .app import Application
 from .config import Config, ScanMode, find_config_file
 from .logger import setup_logger
@@ -110,12 +110,19 @@ def interactive(
     app.start(interactive.main)
 
 
-@app.command("version")
-def version():
-    """Display the current version of cligram."""
+@app.command("info")
+def info():
+    """Display information about cligram and current environment."""
     from . import __version__
 
     typer.echo(f"cligram version: {__version__}")
+
+    device_info = utils.get_device_info()
+    typer.echo(f"Operating System: {device_info.os.value}")
+    typer.echo(f"Architecture: {device_info.architecture.value}")
+    typer.echo(f"OS Title: {device_info.os_title}")
+    typer.echo(f"OS Version: {device_info.version}")
+    typer.echo(f"Device Model: {device_info.model}")
 
 
 @app.callback()
