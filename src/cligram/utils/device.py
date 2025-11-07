@@ -31,9 +31,15 @@ def get_device_info() -> DeviceInfo:
 
     system = platform.system()
     architecture = get_architecture()
+    model = platform.node()
+    version = platform.release()
 
     if system == "Windows":
         os = OperationSystem.WINDOWS
+        mb_model = _windows_get_motherboard_model_registry()
+        if mb_model:
+            model = mb_model
+        version = platform.win32_ver()[0]
     elif system == "Linux":
         if "android" in platform.platform().lower():
             os = OperationSystem.ANDROID
@@ -42,15 +48,7 @@ def get_device_info() -> DeviceInfo:
     else:
         os = OperationSystem.UNKNOWN
 
-    os_title = f"{os.value} {platform.release()} {architecture.value}"
-    version = (
-        platform.win32_ver()[0] if os == OperationSystem.WINDOWS else platform.release()
-    )
-    model = (
-        _windows_get_motherboard_model_registry()
-        if os == OperationSystem.WINDOWS
-        else platform.node()
-    )
+    os_title = f"{os.value} {version} {architecture.value}"
 
     return DeviceInfo(
         os=os,
