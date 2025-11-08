@@ -1,6 +1,6 @@
 [project]
 name = "cligram"
-version = "0.3.0"
+version = "0.3.1"
 description = "cli based telegram client"
 authors = [
     {name = "Alireza Poodineh",email = "itsaeliux@gmail.com"}
@@ -8,7 +8,7 @@ authors = [
 license = {file = "LICENSE.md"}
 readme = "README.md"
 packages = [{include = "cligram", from = "src"}]
-requires-python = "<4.0,>=3.12"
+requires-python = "<4.0,>=3.13"
 dependencies = [
     "telethon (>=1.41.2,<2.0.0)",
     "tenacity (>=9.1.2,<10.0.0)",
@@ -16,7 +16,6 @@ dependencies = [
     "typer (>=0.20.0,<0.21.0)",
     "pysocks (>=1.7.1,<2.0.0)",
     "rich (>=14.2.0,<15.0.0)",
-    "rsa (>=4.9.1,<5.0.0)",
 ]
 keywords = ["telegram", "cli", "bot", "automation", "messaging"]
 classifiers = [
@@ -24,7 +23,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3.13",
-    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3 :: Only",
     "Topic :: Communications :: Chat",
     "Topic :: Internet",
