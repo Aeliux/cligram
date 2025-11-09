@@ -17,7 +17,7 @@ from .exceptions import SessionNotFoundError
 from .proxy_manager import ProxyManager
 from .state_manager import StateManager
 
-logger: logging.Logger = None  # type: ignore
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 class TelegramScanner:
@@ -38,9 +38,6 @@ class TelegramScanner:
         Args:
             app: Application instance
         """
-        global logger
-        logger = logging.getLogger("cligram.scanner")
-
         self.app: Application = app
         self.config: Config = app.config
         self.state: StateManager = app.state

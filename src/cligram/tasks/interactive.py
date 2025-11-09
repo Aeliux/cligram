@@ -18,12 +18,7 @@ from telethon.tl.types import Channel, Message, TypeInputPeer, User, Username
 from .. import Application, InteractiveMode, utils
 from . import telegram
 
-logger: logging.Logger = None  # type: ignore
-
-
-def setup_logger():
-    global logger
-    logger = logging.getLogger("cligram.tasks.interactive")
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 class InputHandler:
@@ -766,8 +761,6 @@ class Context:
 
 async def main(app: Application):
     """Interactive task."""
-    setup_logger()
-
     app.status.update("Starting interactive session...")
     await telegram.setup(app=app, callback=interactive_callback)
 

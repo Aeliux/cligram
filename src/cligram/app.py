@@ -11,7 +11,7 @@ from rich.status import Status
 from .config import Config
 from .state_manager import StateManager
 
-logger: logging.Logger = None  # type: ignore
+logger: logging.Logger = logging.getLogger(__name__)
 app_instance: Optional["Application"] = None
 _recv_signals: int = 0
 
@@ -34,11 +34,8 @@ def get_app() -> "Application":
 
 class Application:
     def __init__(self, config: Config):
-        global logger
-
         self.config = config
-
-        logger = logging.getLogger("cligram.app")
+        """Application configuration."""
 
         self.state = StateManager(data_dir=self.config.data_path)
         """"State manager for application state persistence."""

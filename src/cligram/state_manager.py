@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional, Set, TypeVar
 
-logger: logging.Logger = None  # type: ignore
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 class State(ABC):
@@ -347,9 +347,6 @@ class StateManager:
         Args:
             data_dir (str): Path to the data directory storing all state files
         """
-        global logger
-        logger = logging.getLogger("cligram.state_manager")
-
         self.data_dir = Path(data_dir).resolve()
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
