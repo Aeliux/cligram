@@ -80,7 +80,7 @@ def get_architecture() -> Architecture:
         return Architecture.UNKNOWN
 
 
-def _windows_get_motherboard_model_registry() -> str | None:  # type: ignore
+def _windows_get_motherboard_model_registry() -> str | None:
     import winreg
 
     try:

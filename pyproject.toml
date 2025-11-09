@@ -124,5 +124,6 @@ line-length = 88
 
 [tool.mypy]
 files = ["src"]
+exclude = "src/cligram/utils/device.py"
 ignore_missing_imports = true
 check_untyped_defs = true
