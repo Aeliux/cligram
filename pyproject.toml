@@ -79,9 +79,6 @@ addopts = [
     "--tb=short",
     "--disable-warnings",
     "--strict-markers",
-    "--cov=cligram",
-    "--cov-report=html",
-    "--cov-report=term-missing",
 ]
 markers = [
     "asyncio: marks tests as async",
