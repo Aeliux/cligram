@@ -1,0 +1,12 @@
+{
+	"image": "mcr.microsoft.com/devcontainers/universal:2",
+	"features": {
+		"ghcr.io/devcontainers-extra/features/poetry:2": {
+			"version": "latest"
+		},
+		"ghcr.io/davzucky/devcontainers-features-wolfi/python:1": {
+			"installRuff": true,
+			"pythonVersion": "3.13"
+		}
+	}
+}
