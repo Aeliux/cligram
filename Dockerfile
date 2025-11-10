@@ -9,4 +9,4 @@ ENV PATH="/usr/local/bin:$PATH"
 RUN ldconfig /usr/local/lib || true
 
 # Install poetry
-RUN pip install --no-cache-dir poetry
+RUN pip install --no-cache-dir poetry black ruff mypy
