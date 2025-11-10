@@ -411,42 +411,47 @@ async def _test_telegram_connection(
         success = False
         error = str(e)
     finally:
-        try:
-            if isinstance(client, TelegramClient):
-                if (
-                    isinstance(proxy, Proxy)
-                    and proxy.type == ProxyType.DIRECT
-                    and isinstance(client.session, sessions.Session)
-                ):
-                    proxy.host = client.session.server_address
-                    proxy.port = client.session.port
-                    proxy.url = f"dc:{client.session.dc_id}"
-                if client.is_connected():
-                    await client.disconnect()  # type: ignore
-        except Exception:
-            pass
+        if isinstance(client, TelegramClient):
+            if (
+                isinstance(proxy, Proxy)
+                and proxy.type == ProxyType.DIRECT
+                and isinstance(client.session, sessions.Session)
+            ):
+                proxy.host = client.session.server_address
+                proxy.port = client.session.port
+                proxy.url = f"dc:{client.session.dc_id}"
+            dc = client.disconnect()
+            if dc is not None:
+                await asyncio.shield(dc)
 
     latency = (time.time() - start) * 1000 if success else None
     return success, latency, error
 
 
-async def test_proxy(
-    proxy: "Proxy", timeout: float = 5.0, shutdown_event: Optional[asyncio.Event] = None
+async def _test_proxy_task(
+    proxy: "Proxy",
+    timeout: float = 5.0,
 ) -> ProxyTestResult:
     """Test a proxy with timeout and shutdown support."""
-    if shutdown_event and shutdown_event.is_set():
-        return ProxyTestResult(proxy, False, error="Test cancelled")
-
     if proxy.type == ProxyType.MTPROTO:
         test_func = ping_mtproto
-        success, latency, error = await test_func(proxy, timeout)
     elif proxy.type == ProxyType.SOCKS5:
         test_func = ping_socks5
-        success, latency, error = await test_func(proxy, timeout)
     elif proxy.type == ProxyType.DIRECT:
-        success, latency, error = await ping_direct(proxy, timeout)
+        test_func = ping_direct
     else:
         return ProxyTestResult(proxy, False, error="Unknown proxy type")
+
+    try:
+        success, latency, error = await test_func(proxy, timeout)
+    except asyncio.CancelledError:
+        success = False
+        latency = None
+        error = "Cancelled"
+    except Exception as e:
+        success = False
+        latency = None
+        error = str(e)
 
     return ProxyTestResult(proxy, success, latency, error)
 
@@ -462,30 +467,38 @@ async def test_proxies(
         return []
 
     # Create tasks explicitly using asyncio.create_task
-    tasks = [
-        asyncio.create_task(test_proxy(p, timeout, shutdown_event)) for p in proxies
+    tasks: List[asyncio.Task] = [
+        asyncio.create_task(_test_proxy_task(p, timeout)) for p in proxies
     ]
+    # Add shutdown waiting task if provided
+    watcher: Optional[asyncio.Task] = None
+    if shutdown_event:
+        watcher = asyncio.create_task(shutdown_event.wait())
+        tasks.append(watcher)
     results = []
 
     try:
         # Use as_completed to get results as they finish
         for coro in asyncio.as_completed(tasks):
-            result = await coro
-            results.append(result)
-
-            if (result.success and oneshot) or (
-                shutdown_event and shutdown_event.is_set()
-            ):
+            if watcher is not None and coro is watcher:
+                # Shutdown event triggered
                 break
-    except Exception:
-        pass
+
+            result = await coro
+            if isinstance(result, ProxyTestResult):
+                results.append(result)
+
+                if result.success and oneshot:
+                    break
     finally:
         # Cancel any remaining tasks
         for task in tasks:
             if not task.done():
                 task.cancel()
                 try:
-                    await task
+                    result = await task
+                    if isinstance(result, ProxyTestResult):
+                        results.append(result)
                 except asyncio.CancelledError:
                     pass
 
