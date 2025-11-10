@@ -149,7 +149,7 @@ def install_poetry():
 
             for py_cmd in python_commands:
                 try:
-                    result = subprocess.run(
+                    subprocess.run(
                         [
                             "powershell",
                             "-Command",
@@ -176,7 +176,7 @@ def install_poetry():
 
             for py_cmd in python_commands:
                 try:
-                    result = subprocess.run(
+                    subprocess.run(
                         ["sh", "-c", f"curl -sSL {install_script_url} | {py_cmd} -"],
                         check=True,
                         capture_output=True,
