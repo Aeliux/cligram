@@ -3,11 +3,11 @@
 {
 	// Use the existing Dockerfile to build the container image.
 	"build": {
-		"dockerfile": "Dockerfile",
+		"dockerfile": "../Dockerfile",
 		"context": ".."
 	},
 	// Use 'postCreateCommand' to run commands after the container is created.
-	"postCreateCommand": "script/init.py",
+	"postCreateCommand": "scripts/init.py",
 	// Configure tool-specific properties.
 	"customizations": {
 		"vscode": {
