@@ -284,7 +284,7 @@ async def test_state_manager_register_state(state_dir):
     reloaded_manager = StateManager(str(state_dir))
     reloaded_manager.register("custom2", DummyState())
     reloaded_manager.load()
-    assert reloaded_manager.states["custom2"].data["key"] == "value"
+    assert reloaded_manager.states["custom2"].data["key"] == "value"  # type: ignore
 
     with pytest.raises(ArgumentError):
         manager.register("users", UsersState())  # Already registered

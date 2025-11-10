@@ -155,7 +155,7 @@ def test_get_config(config_file):
     assert Config.get_config() is loaded_config
 
     # set something invalid
-    config._config_instance = "invalid"
+    config._config_instance = "invalid"  # type: ignore
     with pytest.raises(TypeError):
         Config.get_config()
 
