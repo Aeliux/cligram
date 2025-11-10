@@ -392,6 +392,9 @@ class Config:
     updated: bool = False
     """Indicates if the configuration was updated with new fields"""
 
+    overridden: bool = False
+    """Indicates if the configuration was overridden via CLI"""
+
     @property
     def base_path(self) -> Path:
         """Get base directory of the configuration file."""
@@ -442,6 +445,7 @@ class Config:
         if overrides:
             for override in overrides:
                 config.apply_override(override)
+            config.overridden = True
 
         # Check if config structure changed (new fields added)
         new_data = config.to_dict()
@@ -493,6 +497,11 @@ class Config:
 
     def save(self, path: Optional[Path | str] = None):
         """Save configuration to JSON file."""
+        if self.overridden:
+            raise RuntimeError(
+                "Cannot save configuration that has been overridden via CLI."
+            )
+
         save_path = Path(path) if path else self.path
         save_path.parent.mkdir(parents=True, exist_ok=True)
 
