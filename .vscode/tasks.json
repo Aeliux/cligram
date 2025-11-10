@@ -2,38 +2,22 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Install poetry",
+            "label": "Prepare Development Environment",
             "type": "shell",
-            "hide": true,
             "linux": {
-                "command": "curl -sSL https://install.python-poetry.org | python3 -"
+                "command": "scripts/init.py"
             },
             "windows": {
-                "command": "powershell -Command \"(Invoke-WebRequest -Uri https://install.python-poetry.org -UseBasicParsing).Content | python -\""
+                "command": "python scripts\\init.py"
             },
-        },
-        {
-            "label": "Install Dependencies",
-            "hide": true,
-            "dependsOn": "Install poetry",
-            "type": "shell",
-            "command": "poetry install",
-            "group": "build"
-        },
-        {
-            "label": "Install pre-commit hooks",
-            "hide": true,
-            "dependsOn": "Install Dependencies",
-            "type": "shell",
-            "command": "poetry run pre-commit install",
-            "group": "build"
-        },
-        {
-            "label": "Prepare Development Environment",
-            "dependsOn": "Install pre-commit hooks",
-            "type": "shell",
-            "command": "echo Development environment is ready",
-            "group": "build"
+            "group": "build",
+            "presentation": {
+                "echo": false,
+                "reveal": "always",
+                "focus": true,
+                "panel": "new",
+                "showReuseMessage": false,
+            }
         }
     ]
 }
