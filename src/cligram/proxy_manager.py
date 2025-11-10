@@ -467,40 +467,71 @@ async def test_proxies(
         return []
 
     # Create tasks explicitly using asyncio.create_task
-    tasks: List[asyncio.Task] = [
-        asyncio.create_task(_test_proxy_task(p, timeout)) for p in proxies
-    ]
-    # Add shutdown waiting task if provided
-    watcher: Optional[asyncio.Task] = None
-    if shutdown_event:
-        watcher = asyncio.create_task(shutdown_event.wait())
-        tasks.append(watcher)
+    tasks = [asyncio.create_task(_test_proxy_task(p, timeout)) for p in proxies]
     results = []
 
+    async def wait_for_cancellation():
+        final_timeout = (
+            timeout + 0.5
+        )  # Slightly longer to ensure tasks complete before force stop
+
+        try:
+            if shutdown_event:
+                await asyncio.wait_for(
+                    shutdown_event.wait(),
+                    timeout=final_timeout,
+                )
+            else:
+                await asyncio.sleep(final_timeout)
+        except asyncio.TimeoutError:
+            pass
+        except asyncio.CancelledError:
+            pass
+
+    watcher = asyncio.create_task(wait_for_cancellation())
+
+    pending = set(tasks)  # Use a set to track pending tasks
+    pending.add(watcher)  # type: ignore
+
+    should_break = False
+
     try:
-        # Use as_completed to get results as they finish
-        for coro in asyncio.as_completed(tasks):
-            if watcher is not None and coro is watcher:
-                # Shutdown event triggered
+        while pending:
+            done, pending = await asyncio.wait(
+                pending, return_when=asyncio.FIRST_COMPLETED
+            )
+
+            if watcher in done:
+                # Shutdown event triggered or timeout elapsed
                 break
 
-            result = await coro
-            if isinstance(result, ProxyTestResult):
-                results.append(result)
-
-                if result.success and oneshot:
-                    break
-    finally:
-        # Cancel any remaining tasks
-        for task in tasks:
-            if not task.done():
-                task.cancel()
-                try:
+            for task in done:
+                if task is not watcher:
                     result = await task
                     if isinstance(result, ProxyTestResult):
                         results.append(result)
+                        if oneshot and result.success:
+                            should_break = True
+                            break
+
+            if should_break or (len(pending) == 1 and watcher in pending):
+                break
+    finally:
+        # Cancel remaining tasks
+        for task in pending:
+            if task is not watcher and not task.done():
+                task.cancel()
+                try:
+                    result = await task
+                    results.append(result)
                 except asyncio.CancelledError:
                     pass
+        if not watcher.done():
+            watcher.cancel()
+        try:
+            await watcher
+        except asyncio.CancelledError:
+            pass
 
     # Sort by score (successful proxies first, then by latency)
     results.sort(key=lambda r: r.score)
