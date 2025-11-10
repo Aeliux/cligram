@@ -37,6 +37,7 @@ async def run_tests(
     shutdown_event: asyncio.Event | None = None,
     use_url: bool = False,
     timeout: float = 30.0,
+    oneshot: bool = False,
 ):
     if shutdown_event is None:
         shutdown_event = asyncio.Event()
@@ -49,6 +50,7 @@ async def run_tests(
         results = await proxy_manager.test_proxies(
             shutdown_event=shutdown_event,
             timeout=timeout,
+            oneshot=oneshot,
         )
 
         con = Console()
@@ -165,6 +167,9 @@ def test_proxies(
         False, "--show-url", help="Show full proxy URL in the output"
     ),
     timeout: float = typer.Option(30.0, "--timeout", "-t", help="Timeout in seconds"),
+    oneshot: bool = typer.Option(
+        False, "--oneshot", help="Stop testing after the first successful proxy"
+    ),
 ):
     """
     Test all configured proxies and report their status.
@@ -173,7 +178,13 @@ def test_proxies(
     proxy_manager = ProxyManager.from_config(config)
 
     asyncio.run(
-        run_tests(proxy_manager, shutdown_event=None, use_url=show_url, timeout=timeout)
+        run_tests(
+            proxy_manager,
+            shutdown_event=None,
+            use_url=show_url,
+            timeout=timeout,
+            oneshot=oneshot,
+        )
     )
 
 
