@@ -2,6 +2,12 @@ name: CI/CD
 
 on:
   push:
+    paths-ignore:
+      - ".github/**"
+      - ".devcontainer/**"
+      - "docs/**"
+      - ".vscode/**"
+      - ".gitignore"
     branches:
       - main
       - "refs/tags/v*"
