@@ -1,8 +1,10 @@
 import asyncio
+import signal
 from typing import List
 
 import typer
 from rich.console import Console
+from rich.status import Status
 from rich.style import Style
 from rich.table import Table
 
@@ -42,40 +44,43 @@ async def run_tests(
     if shutdown_event is None:
         shutdown_event = asyncio.Event()
 
-    typer.echo(f"Testing {len(proxy_manager.proxies)} proxies...")
+    def _signal_handler():
+        shutdown_event.set()
+
+    signal.signal(signal.SIGINT, lambda s, f: _signal_handler())
+
+    status = Status("Testing proxies...", spinner="dots")
+    status.start()
 
     results = []
 
-    try:
-        results = await proxy_manager.test_proxies(
-            shutdown_event=shutdown_event,
-            timeout=timeout,
-            oneshot=oneshot,
+    results = await proxy_manager.test_proxies(
+        shutdown_event=shutdown_event,
+        timeout=timeout,
+        oneshot=oneshot,
+    )
+
+    status.stop()
+
+    con = Console()
+    table = create_console_table(con, use_url)
+    table.add_column("Status", justify="center", vertical="middle", max_width=15)
+
+    for i, result in enumerate(results):
+        status = f"{result.latency:.0f}ms" if result.success else result.error
+
+        style = Style(
+            color=("red" if not result.success else "green" if result.is_good else None)
         )
 
-        con = Console()
-        table = create_console_table(con, use_url)
-        table.add_column("Status", justify="center", vertical="middle", max_width=15)
-
-        for i, result in enumerate(results):
-            status = f"{result.latency:.0f}ms" if result.success else result.error
-
-            style = Style(
-                color=(
-                    "red" if not result.success else "green" if result.is_good else None
-                )
-            )
-
-            table.add_row(
-                str(i + 1),
-                result.proxy.type.value,
-                _get_proxy_host(result.proxy, use_url=use_url),
-                status,
-                style=style,
-            )
-        con.print(table)
-    finally:
-        shutdown_event.set()
+        table.add_row(
+            str(i + 1),
+            result.proxy.type.value,
+            _get_proxy_host(result.proxy, use_url=use_url),
+            status,
+            style=style,
+        )
+    con.print(table)
 
     return results
 
@@ -111,9 +116,15 @@ def add_proxy(
 
     pending: List[Proxy] = []
     if not skip_test:
+        shutdown_event = asyncio.Event()
         results: list[ProxyTestResult] = asyncio.run(
-            run_tests(proxy_manager, shutdown_event=None, use_url=False)
+            run_tests(proxy_manager, shutdown_event=shutdown_event, use_url=False)
         )
+
+        if shutdown_event.is_set():
+            typer.echo("Operation cancelled.")
+            raise typer.Exit(code=1)
+
         pending = [result.proxy for result in results if result.success]
     else:
         pending = proxy_manager.proxies
@@ -214,9 +225,15 @@ def remove_proxy(
 
     if unreachable:
         proxy_manager = ProxyManager.from_config(config, exclude_direct=True)
+        shutdown_event = asyncio.Event()
         results: list[ProxyTestResult] = asyncio.run(
-            run_tests(proxy_manager, shutdown_event=None, use_url=False)
+            run_tests(proxy_manager, shutdown_event=shutdown_event, use_url=False)
         )
+
+        if shutdown_event.is_set():
+            typer.echo("Operation cancelled.")
+            raise typer.Exit(code=1)
+
         unreachable_proxies = [
             result.proxy.url for result in results if not result.success
         ]
