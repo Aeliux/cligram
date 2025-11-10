@@ -473,7 +473,9 @@ async def test_proxies(
             result = await coro
             results.append(result)
 
-            if oneshot or (shutdown_event and shutdown_event.is_set()):
+            if (result.success and oneshot) or (
+                shutdown_event and shutdown_event.is_set()
+            ):
                 break
     except Exception:
         pass
