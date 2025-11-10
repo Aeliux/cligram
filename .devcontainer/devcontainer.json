@@ -1,12 +1,32 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/alpine
 {
-	"image": "mcr.microsoft.com/devcontainers/universal:2",
+	"name": "Alpine",
+	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
+	"image": "mcr.microsoft.com/devcontainers/base:alpine-3.20",
 	"features": {
+		"ghcr.io/davzucky/devcontainers-features-wolfi/python:1": {
+			"pythonVersion": "3.13"
+		},
 		"ghcr.io/devcontainers-extra/features/poetry:2": {
 			"version": "latest"
-		},
-		"ghcr.io/davzucky/devcontainers-features-wolfi/python:1": {
-			"installRuff": true,
-			"pythonVersion": "3.13"
+		}
+	},
+	// Use 'postCreateCommand' to run commands after the container is created.
+	"postCreateCommand": "script/init.py",
+	// Configure tool-specific properties.
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-python.python",
+				"ms-python.vscode-pylance",
+				"charliermarsh.ruff",
+				"ms-python.black-formatter",
+				"usernamehw.errorlens",
+				"tamasfe.even-better-toml",
+				"matangover.mypy",
+				"donjayamanne.python-environment-manager",
+			]
 		}
 	}
 }
