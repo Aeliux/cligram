@@ -49,8 +49,8 @@ async def run_tests(
 
     signal.signal(signal.SIGINT, lambda s, f: _signal_handler())
 
-    status = Status("Testing proxies...", spinner="dots")
-    status.start()
+    stat = Status("Testing proxies...", spinner="dots")
+    stat.start()
 
     results = []
 
@@ -60,7 +60,7 @@ async def run_tests(
         oneshot=oneshot,
     )
 
-    status.stop()
+    stat.stop()
 
     con = Console()
     table = create_console_table(con, use_url)
