@@ -1,4 +1,4 @@
-from . import utils
+from . import tasks, utils
 from .__version__ import __version__
 from .app import Application
 from .config import Config, InteractiveMode, ScanMode
@@ -24,4 +24,5 @@ __all__ = [
     "ProxyManager",
     "Proxy",
     "InteractiveMode",
+    "tasks",
 ]

@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Callable
 
+_device_cache: "DeviceInfo | None" = None
+
 
 class Platform(Enum):
     UNKNOWN = "Unknown"
@@ -292,13 +294,18 @@ class MacOSDetector:
         return _run_command(["sysctl", "-n", "hw.model"])
 
 
-def get_device_info() -> DeviceInfo:
+def get_device_info(no_cache=False) -> DeviceInfo:
     """
     Get comprehensive device information across all supported platforms.
 
     Returns:
         DeviceInfo: Complete device information including platform, architecture, and environment.
     """
+
+    global _device_cache
+    if not no_cache and isinstance(_device_cache, DeviceInfo):
+        return _device_cache
+
     system = platform.system()
     architecture = get_architecture()
     environments = _detect_environments()
@@ -322,7 +329,7 @@ def get_device_info() -> DeviceInfo:
     # Validate and fallback for model
     model = _validate_model(model, environments)
 
-    return DeviceInfo(
+    device = DeviceInfo(
         platform=plat,
         architecture=architecture,
         name=name,
@@ -330,6 +337,11 @@ def get_device_info() -> DeviceInfo:
         model=model,
         environments=environments,
     )
+
+    if not no_cache:
+        _device_cache = device
+
+    return device
 
 
 def get_architecture() -> Architecture:
