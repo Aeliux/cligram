@@ -1,4 +1,5 @@
 import os
+import platform
 from dataclasses import dataclass
 from enum import Enum
 
@@ -15,6 +16,7 @@ class Environment(Enum):
     DOCKER = "Docker"
     ACTIONS = "GitHub Actions"
     CODESPACES = "Github Codespaces"
+    VIRTUAL_MACHINE = "Virtual Machine"
 
 
 class Architecture(Enum):
@@ -29,20 +31,20 @@ class Architecture(Enum):
 class DeviceInfo:
     platform: Platform
     architecture: Architecture
+    name: str
     version: str
     model: str
     environments: list[Environment]
 
     @property
     def title(self) -> str:
-        return f"{self.platform.value} {self.version} {self.architecture.value}"
+        return f"{self.name} {self.version}"
 
 
 def get_device_info() -> DeviceInfo:
-    import platform
-
     plat = Platform.UNKNOWN
     system = platform.system()
+    name = system
     architecture = get_architecture()
     model = platform.node()
     version = platform.release()
@@ -71,6 +73,22 @@ def get_device_info() -> DeviceInfo:
             plat = Platform.ANDROID
         else:
             plat = Platform.LINUX
+            # Get Linux distro info
+            name, version = _linux_get_distro_info()
+            # Get device/motherboard model
+            device_model = _linux_get_device_model()
+            if device_model:
+                model = device_model
+
+    if (
+        not model
+        or model.strip() == ""
+        or model.lower() == "unknown"
+        or model.lower() == "virtual machine"
+        or model.lower() == "none"
+    ):
+        environments.append(Environment.VIRTUAL_MACHINE)
+        model = platform.node()
 
     if not environments:
         environments.append(Environment.LOCAL)
@@ -78,6 +96,7 @@ def get_device_info() -> DeviceInfo:
     return DeviceInfo(
         platform=plat,
         architecture=architecture,
+        name=name,
         version=version,
         model=model,
         environments=environments,
@@ -117,3 +136,77 @@ def _windows_get_motherboard_model_registry() -> str | None:
         return value
     except Exception:
         return None
+
+
+def _linux_get_distro_info() -> tuple[str, str]:
+    """Get Linux distribution name and version from /etc/os-release."""
+    distro_name = "Linux"
+    distro_version = platform.release()
+
+    try:
+        if os.path.exists("/etc/os-release"):
+            with open("/etc/os-release", "r") as f:
+                lines = f.readlines()
+                name = None
+                version = None
+                for line in lines:
+                    line = line.strip()
+                    if line.startswith("NAME="):
+                        name = line.split("=", 1)[1].strip('"')
+                    elif line.startswith("VERSION_ID="):
+                        version = line.split("=", 1)[1].strip('"')
+                    elif line.startswith("VERSION=") and not version:
+                        version = line.split("=", 1)[1].strip('"')
+
+                if name:
+                    distro_name = name
+                if version:
+                    distro_version = version
+    except Exception:
+        pass
+
+    return distro_name, distro_version
+
+
+def _linux_get_device_model() -> str | None:
+    """Get Linux device/motherboard model from various sources."""
+    # Try DMI information (works on most x86/x64 systems)
+    dmi_paths = [
+        "/sys/class/dmi/id/product_name",
+        "/sys/class/dmi/id/board_name",
+        "/sys/devices/virtual/dmi/id/product_name",
+        "/sys/devices/virtual/dmi/id/board_name",
+    ]
+
+    for path in dmi_paths:
+        try:
+            if os.path.exists(path):
+                with open(path, "r") as f:
+                    model = f.read().strip()
+                    if model and model.lower() not in (
+                        "",
+                        "to be filled by o.e.m.",
+                        "default string",
+                        "system product name",
+                    ):
+                        return model
+        except Exception:
+            continue
+
+    # Try device tree (works on ARM systems like Raspberry Pi)
+    device_tree_paths = [
+        "/proc/device-tree/model",
+        "/sys/firmware/devicetree/base/model",
+    ]
+
+    for path in device_tree_paths:
+        try:
+            if os.path.exists(path):
+                with open(path, "r") as f:
+                    model = f.read().strip().rstrip("\x00")
+                    if model:
+                        return model
+        except Exception:
+            continue
+
+    return None

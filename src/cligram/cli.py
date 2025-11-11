@@ -121,6 +121,7 @@ def info():
     typer.echo(f"Platform: {device_info.platform.value}")
     typer.echo(f"Architecture: {device_info.architecture.value}")
     typer.echo(f"Title: {device_info.title}")
+    typer.echo(f"OS Name: {device_info.name}")
     typer.echo(f"OS Version: {device_info.version}")
     typer.echo(f"Device Model: {device_info.model}")
     typer.echo(
