@@ -20,10 +20,10 @@ def login(
     """Login to a Telegram session."""
     from .. import tasks
 
-    config: Config = ctx.obj["g_load_config"]()
+    config: Config = ctx.obj["cligram.init:core"]()
     if session:
         config.telegram.session = session
-    app: Application = ctx.obj["g_load_app"]()
+    app: Application = ctx.obj["cligram.init:app"]()
     app.start(tasks.session.login)
 
 
@@ -32,7 +32,7 @@ def list_sessions(
     ctx: typer.Context,
 ):
     """List all available Telegram sessions."""
-    ctx.obj["g_load_config"]()
+    ctx.obj["cligram.init:core"]()
     sessions = CustomSession.list_sessions()
     if sessions:
         typer.echo("Available sessions:")

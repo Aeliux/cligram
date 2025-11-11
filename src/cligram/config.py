@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple, overload
 
 from . import GLOBAL_CONFIG_PATH, exceptions
 
@@ -717,6 +717,14 @@ class Config:
 def get_search_paths() -> List[Path]:
     """Get a list of all configuration search paths."""
     return [Path.cwd(), GLOBAL_CONFIG_PATH.parent]
+
+
+@overload
+def find_config_file(raise_error: Literal[True]) -> Path: ...
+
+
+@overload
+def find_config_file(raise_error: Literal[False]) -> Optional[Path]: ...
 
 
 def find_config_file(raise_error: bool = False) -> Optional[Path]:  # pragma: no cover

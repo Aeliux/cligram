@@ -104,7 +104,7 @@ def add_proxy(
     """
     Add a new proxy to the configuration.
     """
-    config: Config = ctx.obj["g_load_config"]()
+    config: Config = ctx.obj["cligram.init:core"]()
     proxy_manager = ProxyManager()
 
     for proxy_url in url:
@@ -152,7 +152,7 @@ def list_proxies(
     """
     List all configured proxies.
     """
-    config: Config = ctx.obj["g_load_config"]()
+    config: Config = ctx.obj["cligram.init:core"]()
     proxy_manager = ProxyManager.from_config(config)
 
     if not proxy_manager.proxies:
@@ -185,7 +185,7 @@ def test_proxies(
     """
     Test all configured proxies and report their status.
     """
-    config: Config = ctx.obj["g_load_config"]()
+    config: Config = ctx.obj["cligram.init:core"]()
     proxy_manager = ProxyManager.from_config(config)
 
     asyncio.run(
@@ -213,7 +213,7 @@ def remove_proxy(
     """
     Remove a proxy from the configuration.
     """
-    config: Config = ctx.obj["g_load_config"]()
+    config: Config = ctx.obj["cligram.init:core"]()
 
     unreachable_proxies: List[str] = []
 

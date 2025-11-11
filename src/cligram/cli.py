@@ -56,7 +56,7 @@ def run(
     typer.echo("The 'run' command is currently under development.")
     typer.Exit(1)
 
-    # config: Config = ctx.obj["g_load_config"]()
+    # config: Config = ctx.obj["cligram.init:core"]()
     # if test:
     #     config.scan.test = True
     # if rapid_save:
@@ -86,12 +86,12 @@ def interactive(
     """Run the application in interactive mode."""
     from .tasks import interactive
 
-    config: Config = ctx.obj["g_load_config"]()
+    config: Config = ctx.obj["cligram.init:core"]()
     if session:
         config.telegram.session = session
         config.overridden = True
 
-    app: Application = ctx.obj["g_load_app"]()
+    app: Application = ctx.obj["cligram.init:app"]()
     app.start(interactive.main)
 
 
@@ -141,40 +141,60 @@ def callback(
     logger.info("Starting cligram CLI")
 
     ctx.obj = {}
+    ctx.obj["cligram.args:config"] = config
+    ctx.obj["cligram.args:verbose"] = verbose
+    ctx.obj["cligram.args:overrides"] = overrides
 
-    def setup() -> Config:
-        nonlocal config, verbose, overrides
+    ctx.obj["cligram.init:core"] = lambda: init(ctx)
+    ctx.obj["cligram.init:app"] = lambda: init_app(ctx)
 
-        if Config.get_config(raise_if_failed=False) is not None:
-            return Config.get_config()
 
-        try:
-            config = config or find_config_file(raise_error=True)  # type: ignore
-            loaded_config = Config.from_file(config, overrides=overrides)  # type: ignore
-        except FileNotFoundError:
-            raise ClickException(f"Configuration file not found: {config}")
-        except exceptions.ConfigSearchError as e:
-            raise ClickException(str(e))
-        if verbose and not loaded_config.app.verbose:
-            loaded_config.overridden = True
-            loaded_config.app.verbose = True
+def init(ctx: typer.Context) -> Config:
+    """
+    Initialize core components based on CLI context.
+    After this function is called, the pre-init stage is over, configuration is guaranteed to be loaded, logger is set up, and ready for use.
 
-        logger.info("Configuration loaded successfully.")
-        logger.info("pre-init complete.")
+    Returns:
+        Config: Loaded configuration instance.
+    """
+    if Config.get_config(raise_if_failed=False) is not None:
+        return Config.get_config()
+    config: Optional[Path] = ctx.obj["cligram.args:config"]
 
-        setup_logger(loaded_config)
+    try:
+        if not config:
+            config = find_config_file(raise_error=True)
+        loaded_config = Config.from_file(
+            config, overrides=ctx.obj["cligram.args:overrides"]
+        )
+    except FileNotFoundError:
+        raise ClickException(f"Configuration file not found: {config}")
+    except exceptions.ConfigSearchError as e:
+        raise ClickException(str(e))
+    if ctx.obj["cligram.args:verbose"] and not loaded_config.app.verbose:
+        loaded_config.overridden = True
+        loaded_config.app.verbose = True
 
-        return loaded_config
+    logger.info("Configuration loaded successfully.")
+    logger.info("pre-init complete.")
 
-    ctx.obj["g_load_config"] = setup
+    setup_logger(loaded_config)
 
-    def load_app() -> Application:
-        from .app import Application
+    return loaded_config
 
-        cfg = ctx.obj["g_load_config"]()
-        return Application(config=cfg)
 
-    ctx.obj["g_load_app"] = load_app
+def init_app(ctx: typer.Context) -> Application:
+    """
+    Ensures the core is initialized, then
+    Initialize the main application instance based on CLI context.
+
+    Returns:
+        Application: Initialized application instance.
+    """
+    from .app import Application
+
+    cfg = ctx.obj["cligram.init:core"]()
+    return Application(config=cfg)
 
 
 def main():

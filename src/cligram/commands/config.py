@@ -53,7 +53,7 @@ def list_configs(
     ctx: typer.Context,
 ):
     """List all available configuration files."""
-    config: Config = ctx.obj["g_load_config"]()
+    config: Config = ctx.obj["cligram.init:core"]()
     flatted = Config._flatten_dict(config.to_dict())
     for key, value in flatted.items():
         typer.echo(f"{key}={value}")
@@ -65,7 +65,7 @@ def get_config(
     ctx: typer.Context, key: str = typer.Argument(help="Configuration key to retrieve")
 ):
     """Get a specific configuration value."""
-    config: Config = ctx.obj["g_load_config"]()
+    config: Config = ctx.obj["cligram.init:core"]()
     value = config.get_nested_value(key)
     if value is not None:
         typer.echo(f"{key}={value}")
@@ -81,7 +81,7 @@ def set_config(
     value: str = typer.Argument(help="Configuration value to set"),
 ):
     """Set a specific configuration value."""
-    config: Config = ctx.obj["g_load_config"]()
+    config: Config = ctx.obj["cligram.init:core"]()
     parsed_value = config._parse_value(value)
     config._set_nested_value(key, parsed_value)
     config.save()
