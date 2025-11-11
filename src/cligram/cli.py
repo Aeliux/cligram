@@ -3,7 +3,9 @@ from pathlib import Path
 from typing import List, Optional
 
 import typer
-from click import FileError
+from click import ClickException
+
+from cligram import exceptions
 
 from . import Application, Config, ScanMode, commands, utils
 from .config import find_config_file
@@ -11,32 +13,13 @@ from .logger import setup_logger, setup_preinit_logger
 
 logger = logging.getLogger(__name__)
 
-
-def validate_config_path(value: Path) -> Path:
-    """
-    Validate configuration file path.
-
-    Args:
-        value: Path to validate
-
-    Returns:
-        Path: Valid configuration file path
-
-    Raises:
-        typer.BadParameter: If path doesn't exist or points to directory
-    """
-    resolved_path = value.resolve()
-    if not resolved_path.exists():
-        raise typer.BadParameter(f"Config file does not exist: {resolved_path}")
-    if resolved_path.is_dir():
-        raise typer.BadParameter(f"Config path points to a directory: {resolved_path}")
-
-    return resolved_path
-
-
 app = typer.Typer(
     help="CLI based telegram client",
     add_completion=False,
+    no_args_is_help=True,
+    add_help_option=True,
+    pretty_exceptions_show_locals=False,  # For security reasons
+    pretty_exceptions_short=True,
 )
 
 app.add_typer(commands.config.app, name="config")
@@ -106,6 +89,7 @@ def interactive(
     config: Config = ctx.obj["g_load_config"]()
     if session:
         config.telegram.session = session
+        config.overridden = True
 
     app: Application = ctx.obj["g_load_app"]()
     app.start(interactive.main)
@@ -164,17 +148,19 @@ def callback(
         if Config.get_config(raise_if_failed=False) is not None:
             return Config.get_config()
 
-        config = config or find_config_file(raise_error=True)
-        if not config:
-            raise FileError("Configuration file not found.")
-
-        loaded_config = Config.from_file(config, overrides=overrides)
+        try:
+            config = config or find_config_file(raise_error=True)  # type: ignore
+            loaded_config = Config.from_file(config, overrides=overrides)  # type: ignore
+        except FileNotFoundError:
+            raise ClickException(f"Configuration file not found: {config}")
+        except exceptions.ConfigSearchError as e:
+            raise ClickException(str(e))
         if verbose and not loaded_config.app.verbose:
             loaded_config.overridden = True
             loaded_config.app.verbose = True
 
         logger.info("Configuration loaded successfully.")
-        logger.info("pre-init complete, setting up logger")
+        logger.info("pre-init complete.")
 
         setup_logger(loaded_config)
 

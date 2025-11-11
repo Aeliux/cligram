@@ -8,6 +8,7 @@ from typing import Callable, Coroutine, Optional
 from rich import get_console
 from rich.status import Status
 
+from . import exceptions
 from .config import Config
 from .state_manager import StateManager
 
@@ -18,17 +19,17 @@ _recv_signals: int = 0
 
 def get_app() -> "Application":
     """
-    Retrieve the global application instance.
+    Retrieve the global running application instance.
 
     Returns:
         Application: The global application instance
 
     Raises:
-        RuntimeError: If application is not initialized
+        ApplicationNotRunningError: If there is no running application
     """
     global app_instance
     if app_instance is None:
-        raise RuntimeError("Application instance is not initialized")
+        raise exceptions.ApplicationNotRunningError("There is no running application")
     return app_instance
 
 
@@ -138,13 +139,18 @@ class Application:
 
     async def run(self, task: Callable[["Application"], Coroutine]):
         """
-        Initialize application and run task.
+        Executed by start() to run the main application task.
         """
         from . import __version__
 
+        if not asyncio.iscoroutinefunction(task):
+            raise TypeError("The provided task must be an async function")
+
         global app_instance
         if app_instance is not None:
-            raise RuntimeError("Application instance is already running")
+            raise exceptions.ApplicationAlreadyRunningError(
+                "An application is already running"
+            )
         app_instance = self
 
         self.status.update("Starting application...")
@@ -170,9 +176,6 @@ class Application:
             self.status.update("Running task...")
             await task(self)
             logger.info("Execution completed successfully")
-        except Exception as e:
-            logger.error(f"Error during execution: {e}")
-            raise
         finally:
             self.status.update("Shutting down...")
             await self.state.save()
@@ -183,17 +186,19 @@ class Application:
 
     def start(self, task: Callable[["Application"], Coroutine]):
         """
-        Start the application event loop and run the specified task.
+        Initialize application and run the main task in the event loop.
+
+        Initializes signal handlers, loads state, and executes the provided task.
+        After task completion, saves state and performs cleanup.
+        Raised exceptions are logged and re-raised.
 
         Args:
             task (Callable): Async function representing the main task to run
+
+        Raises:
+            ApplicationAlreadyRunningError: If an application is already running
+            TypeError: If the provided task is not an async function
         """
-        if app_instance is not None:
-            raise RuntimeError("Application instance is already running")
-
-        if not callable(task):
-            raise ValueError("Task must be a callable async function")
-
         try:
             asyncio.run(self.run(task))
         except (asyncio.CancelledError, KeyboardInterrupt):

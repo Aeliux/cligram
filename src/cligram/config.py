@@ -9,7 +9,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from . import GLOBAL_CONFIG_PATH
+from . import GLOBAL_CONFIG_PATH, exceptions
 
 _config_instance: Optional["Config"] = None
 logger = logging.getLogger(__name__)
@@ -736,7 +736,9 @@ def find_config_file(raise_error: bool = False) -> Optional[Path]:  # pragma: no
 
     if raise_error:
         logger.error(f"No configuration file found in {search_paths}.")
-        raise FileNotFoundError("No configuration file found in expected locations.")
+        raise exceptions.ConfigSearchError(
+            "No configuration file found in expected locations."
+        )
 
     logger.warning(f"No configuration file found in {search_paths}.")
     return None

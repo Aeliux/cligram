@@ -1,5 +1,7 @@
 from importlib.metadata import PackageNotFoundError, version
 
+from . import exceptions
+
 try:
     __version__ = version("cligram")
 except PackageNotFoundError:
@@ -13,4 +15,4 @@ except PackageNotFoundError:
             pyproject = tomllib.load(f)
         __version__ = pyproject["project"]["version"]
     except (FileNotFoundError, KeyError):
-        raise RuntimeError("Cannot determine the version of cligram.")
+        raise exceptions.VersionError("Cannot determine the version of cligram.")
