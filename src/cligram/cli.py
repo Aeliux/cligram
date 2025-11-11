@@ -118,11 +118,14 @@ def info():
     typer.echo(f"cligram version: {__version__}")
 
     device_info = utils.get_device_info()
-    typer.echo(f"Operating System: {device_info.os.value}")
+    typer.echo(f"Platform: {device_info.platform.value}")
     typer.echo(f"Architecture: {device_info.architecture.value}")
-    typer.echo(f"OS Title: {device_info.os_title}")
+    typer.echo(f"Title: {device_info.title}")
     typer.echo(f"OS Version: {device_info.version}")
     typer.echo(f"Device Model: {device_info.model}")
+    typer.echo(
+        f"Environments: {', '.join(env.value for env in device_info.environments)}"
+    )
 
 
 @app.callback()

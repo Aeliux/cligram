@@ -1,12 +1,20 @@
+import os
 from dataclasses import dataclass
 from enum import Enum
 
 
-class OperationSystem(Enum):
+class Platform(Enum):
     UNKNOWN = "Unknown"
     WINDOWS = "Windows"
     LINUX = "Linux"
     ANDROID = "Android"
+
+
+class Environment(Enum):
+    LOCAL = "Local"
+    DOCKER = "Docker"
+    ACTIONS = "GitHub Actions"
+    CODESPACES = "Github Codespaces"
 
 
 class Architecture(Enum):
@@ -19,43 +27,60 @@ class Architecture(Enum):
 
 @dataclass
 class DeviceInfo:
-    os: OperationSystem
+    platform: Platform
     architecture: Architecture
-    os_title: str
     version: str
     model: str
+    environments: list[Environment]
+
+    @property
+    def title(self) -> str:
+        return f"{self.platform.value} {self.version} {self.architecture.value}"
 
 
 def get_device_info() -> DeviceInfo:
     import platform
 
+    plat = Platform.UNKNOWN
     system = platform.system()
     architecture = get_architecture()
     model = platform.node()
     version = platform.release()
+    environments: list[Environment] = []
+
+    # Detect github codespaces
+    if os.getenv("CODESPACES") == "true":
+        environments.append(Environment.CODESPACES)
+
+    # Detect github actions
+    if os.getenv("GITHUB_ACTIONS") == "true":
+        environments.append(Environment.ACTIONS)
+
+    # Detect docker
+    if os.path.exists("/.dockerenv") or os.path.exists("/.containerenv"):
+        environments.append(Environment.DOCKER)
 
     if system == "Windows":
-        os = OperationSystem.WINDOWS
+        plat = Platform.WINDOWS
         mb_model = _windows_get_motherboard_model_registry()
         if mb_model:
             model = mb_model
         version = platform.win32_ver()[0]
     elif system == "Linux":
         if "android" in platform.platform().lower():
-            os = OperationSystem.ANDROID
+            plat = Platform.ANDROID
         else:
-            os = OperationSystem.LINUX
-    else:
-        os = OperationSystem.UNKNOWN
+            plat = Platform.LINUX
 
-    os_title = f"{os.value} {version} {architecture.value}"
+    if not environments:
+        environments.append(Environment.LOCAL)
 
     return DeviceInfo(
-        os=os,
+        platform=plat,
         architecture=architecture,
-        os_title=os_title,
         version=version,
         model=model,
+        environments=environments,
     )
 
 
