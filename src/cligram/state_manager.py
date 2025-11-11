@@ -363,9 +363,10 @@ class StateManager:
         self.users: UsersState = self.register("users", UsersState())
         self.groups: GroupsState = self.register("groups", GroupsState())
 
-    def _get_state_path(self, name: str) -> Path:
+    def _get_state_path(self, name: str, dir: Optional[str | Path] = None) -> Path:
         """Get full path for state file."""
-        return self.data_dir / f"{name}.json"
+        source = Path(dir).resolve() if dir else self.data_dir
+        return source / f"{name}.json"
 
     def register(self, name: str, state: StateT) -> StateT:
         """Register a new state type."""
