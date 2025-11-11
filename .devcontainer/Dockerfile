@@ -8,5 +8,9 @@ COPY --from=python-base /usr/local /usr/local
 ENV PATH="/usr/local/bin:$PATH"
 RUN ldconfig /usr/local/lib || true
 
-# Install poetry
-RUN pip install --no-cache-dir poetry black ruff mypy
+# Install pip dependecies used by extensions and build system
+RUN pip install --no-cache-dir \
+    poetry==2.2.1 \
+    black==25.11.0 \
+    ruff==0.14.4 \
+    mypy==1.18.2
