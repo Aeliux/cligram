@@ -3,11 +3,11 @@ import base64
 import io
 import os
 import tarfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import AsyncIterator, BinaryIO, Dict, List, Optional, Union
+from typing import AsyncIterator, Dict, List, Optional, Union
 
 import aiofiles
 from cryptography.fernet import Fernet

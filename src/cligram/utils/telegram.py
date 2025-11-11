@@ -1,7 +1,6 @@
 import datetime
 import logging
-from platform import node, release, system
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from telethon import TelegramClient
 from telethon.tl.custom.dialog import Dialog
@@ -19,19 +18,18 @@ from telethon.tl.types import (
     UserStatusRecently,
 )
 
-from ..config import Config
-from ..proxy_manager import Proxy
-from ..session import CustomSession
-from . import DeviceInfo
+if TYPE_CHECKING:
+    from .. import Config, CustomSession, Proxy
+    from . import DeviceInfo
 
 logger = logging.getLogger(__name__)
 
 
 def get_client(
-    config: Config,
-    device: DeviceInfo,
-    proxy: Optional[Proxy],
-    session: Optional[CustomSession],
+    config: "Config",
+    device: "DeviceInfo",
+    proxy: Optional["Proxy"],
+    session: Optional["CustomSession"],
 ) -> TelegramClient:
     """
     Create a Telethon TelegramClient from the given configuration.
@@ -74,11 +72,13 @@ def get_client(
 
 
 def get_session(
-    config: Config, create: bool = False, device: Optional[DeviceInfo] = None
-) -> CustomSession:
+    config: "Config", create: bool = False, device: Optional["DeviceInfo"] = None
+) -> "CustomSession":
     """
     Load a CustomSession based on the configuration.
     """
+    from ..session import CustomSession
+
     session = CustomSession(session_id=config.telegram.session, create=create)
     if create and device:
         session.set_device_info(device_info=device)

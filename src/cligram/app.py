@@ -3,14 +3,15 @@ import logging
 import platform
 import signal
 import sys
-from typing import Callable, Coroutine, Optional
+from typing import TYPE_CHECKING, Callable, Coroutine, Optional
 
 from rich import get_console
 from rich.status import Status
 
-from . import exceptions, utils
-from .config import Config
-from .state_manager import StateManager
+from . import StateManager, exceptions, utils
+
+if TYPE_CHECKING:
+    from . import Config
 
 logger: logging.Logger = logging.getLogger(__name__)
 app_instance: Optional["Application"] = None
@@ -34,7 +35,7 @@ def get_app() -> "Application":
 
 
 class Application:
-    def __init__(self, config: Config):
+    def __init__(self, config: "Config"):
         self.config = config
         """Application configuration."""
 

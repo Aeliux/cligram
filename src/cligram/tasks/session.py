@@ -1,10 +1,15 @@
+from typing import TYPE_CHECKING
+
 from telethon import TelegramClient
 
-from .. import Application, CustomSession, exceptions, utils
+from .. import exceptions, utils
 from . import telegram
 
+if TYPE_CHECKING:
+    from .. import Application, CustomSession
 
-async def login(app: Application):
+
+async def login(app: "Application"):
     """Login to a new Telegram session."""
     exists = False
     try:
@@ -18,22 +23,22 @@ async def login(app: Application):
         return
 
     app.status.update("Logging in to Telegram...")
-    session: CustomSession = utils.get_session(app.config, create=True)
+    session: "CustomSession" = utils.get_session(app.config, create=True)
 
     await telegram.setup(app=app, callback=login_callback, session=session)
 
 
-async def login_callback(app: Application, client: TelegramClient):
+async def login_callback(app: "Application", client: TelegramClient):
     """Callback for login task."""
     app.console.print("[green]Logged in successfully![/green]")
 
 
-async def logout(app: Application):
+async def logout(app: "Application"):
     """Logout from the current Telegram session."""
     await telegram.setup(app=app, callback=logout_callback, disconnect_expected=True)
 
 
-async def logout_callback(app: Application, client: TelegramClient):
+async def logout_callback(app: "Application", client: TelegramClient):
     """Callback for logout task."""
     app.status.update("Logging out...")
     res = await client.log_out()

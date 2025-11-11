@@ -1,6 +1,6 @@
 import asyncio
 import signal
-from typing import List
+from typing import TYPE_CHECKING, List
 
 import typer
 from rich.console import Console
@@ -8,8 +8,11 @@ from rich.status import Status
 from rich.style import Style
 from rich.table import Table
 
-from ..config import Config
-from ..proxy_manager import Proxy, ProxyManager, ProxyTestResult
+from .. import ProxyManager
+
+if TYPE_CHECKING:
+    from .. import Config
+    from ..proxy_manager import Proxy, ProxyTestResult
 
 app = typer.Typer(
     help="Manage proxy settings and test proxy connectivity",
@@ -17,14 +20,14 @@ app = typer.Typer(
 )
 
 
-def _get_proxy_title(proxy: Proxy, use_url) -> str:
+def _get_proxy_title(proxy: "Proxy", use_url) -> str:
     if use_url:
         return proxy.url
     else:
         return f"[{proxy.type.value}] {_get_proxy_host(proxy, use_url=False)}"
 
 
-def _get_proxy_host(proxy: Proxy, use_url: bool) -> str:
+def _get_proxy_host(proxy: "Proxy", use_url: bool) -> str:
     if proxy.is_direct and not proxy.url:
         return "direct"
 
@@ -104,7 +107,7 @@ def add_proxy(
     """
     Add a new proxy to the configuration.
     """
-    config: Config = ctx.obj["cligram.init:core"]()
+    config: "Config" = ctx.obj["cligram.init:core"]()
     proxy_manager = ProxyManager()
 
     for proxy_url in url:
@@ -114,10 +117,10 @@ def add_proxy(
         typer.echo("Failed to add proxy. Please check the URL format.")
         raise typer.Exit(code=1)
 
-    pending: List[Proxy] = []
+    pending: List["Proxy"] = []
     if not skip_test:
         shutdown_event = asyncio.Event()
-        results: list[ProxyTestResult] = asyncio.run(
+        results: list["ProxyTestResult"] = asyncio.run(
             run_tests(proxy_manager, shutdown_event=shutdown_event, use_url=False)
         )
 
@@ -152,7 +155,7 @@ def list_proxies(
     """
     List all configured proxies.
     """
-    config: Config = ctx.obj["cligram.init:core"]()
+    config: "Config" = ctx.obj["cligram.init:core"]()
     proxy_manager = ProxyManager.from_config(config)
 
     if not proxy_manager.proxies:
@@ -185,7 +188,7 @@ def test_proxies(
     """
     Test all configured proxies and report their status.
     """
-    config: Config = ctx.obj["cligram.init:core"]()
+    config: "Config" = ctx.obj["cligram.init:core"]()
     proxy_manager = ProxyManager.from_config(config)
 
     asyncio.run(
@@ -213,7 +216,7 @@ def remove_proxy(
     """
     Remove a proxy from the configuration.
     """
-    config: Config = ctx.obj["cligram.init:core"]()
+    config: "Config" = ctx.obj["cligram.init:core"]()
 
     unreachable_proxies: List[str] = []
 
@@ -226,7 +229,7 @@ def remove_proxy(
     if unreachable:
         proxy_manager = ProxyManager.from_config(config, exclude_direct=True)
         shutdown_event = asyncio.Event()
-        results: list[ProxyTestResult] = asyncio.run(
+        results: list["ProxyTestResult"] = asyncio.run(
             run_tests(proxy_manager, shutdown_event=shutdown_event, use_url=False)
         )
 

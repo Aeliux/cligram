@@ -1,15 +1,15 @@
 import logging
 from pathlib import Path
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 import typer
 from click import ClickException
 
-from cligram import exceptions
-
-from . import Application, Config, ScanMode, commands, utils
-from .config import find_config_file
+from . import commands, exceptions, utils
 from .logger import setup_logger, setup_preinit_logger
+
+if TYPE_CHECKING:
+    from . import Application, Config
 
 logger = logging.getLogger(__name__)
 
@@ -27,50 +27,50 @@ app.add_typer(commands.session.app, name="session")
 app.add_typer(commands.proxy.app, name="proxy")
 
 
-@app.command()
-def run(
-    ctx: typer.Context,
-    test: bool = typer.Option(
-        False, "-t", "--test", help="Run in test mode without sending actual messages"
-    ),
-    rapid_save: bool = typer.Option(
-        False, "--rapid-save", help="Enable rapid state saving to disk"
-    ),
-    mode: ScanMode = typer.Option(
-        ScanMode.FULL.value, "-m", "--mode", help="Operation mode"
-    ),
-    session: Optional[str] = typer.Option(
-        None, "-s", "--session", help="Telethon session name for authentication"
-    ),
-    limit: Optional[int] = typer.Option(
-        None, "-l", "--limit", help="Maximum number of messages to process per group"
-    ),
-    exclude: Optional[Path] = typer.Option(
-        None,
-        "-e",
-        "--exclude",
-        help="JSON file with usernames to exclude from processing",
-    ),
-):
-    """Telegram message scanner and forwarder."""
-    typer.echo("The 'run' command is currently under development.")
-    typer.Exit(1)
+# @app.command()
+# def run(
+#     ctx: typer.Context,
+#     test: bool = typer.Option(
+#         False, "-t", "--test", help="Run in test mode without sending actual messages"
+#     ),
+#     rapid_save: bool = typer.Option(
+#         False, "--rapid-save", help="Enable rapid state saving to disk"
+#     ),
+#     mode: ScanMode = typer.Option(
+#         ScanMode.FULL.value, "-m", "--mode", help="Operation mode"
+#     ),
+#     session: Optional[str] = typer.Option(
+#         None, "-s", "--session", help="Telethon session name for authentication"
+#     ),
+#     limit: Optional[int] = typer.Option(
+#         None, "-l", "--limit", help="Maximum number of messages to process per group"
+#     ),
+#     exclude: Optional[Path] = typer.Option(
+#         None,
+#         "-e",
+#         "--exclude",
+#         help="JSON file with usernames to exclude from processing",
+#     ),
+# ):
+#     """Telegram message scanner and forwarder."""
+#     typer.echo("The 'run' command is currently under development.")
+#     typer.Exit(1)
 
-    # config: Config = ctx.obj["cligram.init:core"]()
-    # if test:
-    #     config.scan.test = True
-    # if rapid_save:
-    #     config.scan.rapid_save = True
-    # if mode:
-    #     config.scan.mode = mode
-    # if session:
-    #     config.telegram.session = session
-    # if limit is not None:
-    #     config.scan.limit = limit
-    # if exclude:
-    #     config.exclusions = json.load(exclude.open("r"))
-    # app = Application(config=config)
-    # app.start()
+#     config: Config = ctx.obj["cligram.init:core"]()
+#     if test:
+#         config.scan.test = True
+#     if rapid_save:
+#         config.scan.rapid_save = True
+#     if mode:
+#         config.scan.mode = mode
+#     if session:
+#         config.telegram.session = session
+#     if limit is not None:
+#         config.scan.limit = limit
+#     if exclude:
+#         config.exclusions = json.load(exclude.open("r"))
+#     app = Application(config=config)
+#     app.start()
 
 
 @app.command("interactive")
@@ -86,12 +86,12 @@ def interactive(
     """Run the application in interactive mode."""
     from .tasks import interactive
 
-    config: Config = ctx.obj["cligram.init:core"]()
+    config: "Config" = ctx.obj["cligram.init:core"]()
     if session:
         config.telegram.session = session
         config.overridden = True
 
-    app: Application = ctx.obj["cligram.init:app"]()
+    app: "Application" = ctx.obj["cligram.init:app"]()
     app.start(interactive.main)
 
 
@@ -149,7 +149,7 @@ def callback(
     ctx.obj["cligram.init:app"] = lambda: init_app(ctx)
 
 
-def init(ctx: typer.Context) -> Config:
+def init(ctx: typer.Context) -> "Config":
     """
     Initialize core components based on CLI context.
     After this function is called, the pre-init stage is over, configuration is guaranteed to be loaded, logger is set up, and ready for use.
@@ -157,6 +157,8 @@ def init(ctx: typer.Context) -> Config:
     Returns:
         Config: Loaded configuration instance.
     """
+    from .config import Config, find_config_file
+
     if Config.get_config(raise_if_failed=False) is not None:
         return Config.get_config()
     config: Optional[Path] = ctx.obj["cligram.args:config"]
@@ -183,7 +185,7 @@ def init(ctx: typer.Context) -> Config:
     return loaded_config
 
 
-def init_app(ctx: typer.Context) -> Application:
+def init_app(ctx: typer.Context) -> "Application":
     """
     Ensures the core is initialized, then
     Initialize the main application instance based on CLI context.
@@ -191,7 +193,7 @@ def init_app(ctx: typer.Context) -> Application:
     Returns:
         Application: Initialized application instance.
     """
-    from .app import Application
+    from . import Application
 
     cfg = ctx.obj["cligram.init:core"]()
     return Application(config=cfg)

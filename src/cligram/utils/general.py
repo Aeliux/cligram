@@ -1,4 +1,10 @@
-def validate_proxy(proxy) -> bool:
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .. import Proxy
+
+
+def validate_proxy(proxy: "Proxy") -> bool:
     """Validate if the given proxy is valid"""
     from .. import Proxy
     from ..proxy_manager import ProxyType

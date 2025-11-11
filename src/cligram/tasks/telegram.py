@@ -1,20 +1,15 @@
 import logging
-from typing import Callable, Coroutine, Optional
+from typing import TYPE_CHECKING, Callable, Coroutine, Optional
 
 from rich.style import Style
 from telethon import TelegramClient
 from telethon.tl import functions
 from telethon.tl.types import User
 
-from .. import (
-    Application,
-    CustomSession,
-    Proxy,
-    ProxyManager,
-    exceptions,
-    utils,
-)
-from ..exceptions import NoWorkingConnectionError
+from .. import exceptions, utils
+
+if TYPE_CHECKING:
+    from .. import Application, CustomSession, Proxy
 
 logger: logging.Logger = None  # type: ignore
 
@@ -25,10 +20,10 @@ def setup_logger():
 
 
 async def setup(
-    app: Application,
-    callback: Callable[[Application, TelegramClient], Coroutine],
-    session: Optional[CustomSession] = None,
-    proxy: Optional[Proxy] = None,
+    app: "Application",
+    callback: Callable[["Application", TelegramClient], Coroutine],
+    session: Optional["CustomSession"] = None,
+    proxy: Optional["Proxy"] = None,
     disconnect_expected: bool = False,
 ):
     """Setup Telegram client."""
@@ -75,7 +70,7 @@ async def setup(
             style=Style(color="red"),
         )
         logger.error(f"Session not found: {e}")
-    except NoWorkingConnectionError as e:
+    except exceptions.NoWorkingConnectionError as e:
         app.console.print("No working connection available", style=Style(color="red"))
         logger.error(f"No working connection available: {e}")
     except Exception as e:
@@ -83,7 +78,9 @@ async def setup(
         raise
 
 
-async def _setup_connection(app: Application) -> Proxy | None:
+async def _setup_connection(app: "Application") -> "Proxy" | None:
+    from .. import ProxyManager
+
     app.status.update("Testing connections...")
     logger.info("Testing connections")
     proxy_manager = ProxyManager.from_config(app.config)
@@ -103,7 +100,7 @@ def _finalize_connection(app, proxy):
             logger.info(f"Using proxy: [{proxy.type.name}] {proxy.host}:{proxy.port}")
     else:
         logger.error("No working connection available, aborting")
-        raise NoWorkingConnectionError("No working connection available")
+        raise exceptions.NoWorkingConnectionError("No working connection available")
 
 
 async def _check_unread_messages(app, client):
@@ -158,9 +155,9 @@ async def _fetch_account_info(app, client):
 
 
 async def _init_client(
-    app: Application,
-    session: CustomSession,
-    proxy: Optional[Proxy] = None,
+    app: "Application",
+    session: "CustomSession",
+    proxy: Optional["Proxy"] = None,
 ) -> TelegramClient:
     """Initialize Telegram client."""
     app.status.update("Initializing client...")

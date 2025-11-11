@@ -3,8 +3,12 @@ import logging
 import time
 from logging import FileHandler
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from . import DEFAULT_LOGS_PATH, Config
+from . import DEFAULT_LOGS_PATH
+
+if TYPE_CHECKING:
+    from . import Config
 
 
 class ColoredNameFormatter(logging.Formatter):
@@ -63,7 +67,7 @@ def setup_preinit_logger():
     )
 
 
-def setup_logger(config: Config):
+def setup_logger(config: "Config"):
     log_file = config.base_path / "logs" / f"{get_date()}.log"
 
     logging.basicConfig(

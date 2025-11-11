@@ -1,6 +1,11 @@
+from typing import TYPE_CHECKING
+
 import typer
 
-from .. import Application, Config, CustomSession, utils
+from .. import utils
+
+if TYPE_CHECKING:
+    from .. import Application, Config
 
 app = typer.Typer(
     help="Manage Telegram sessions",
@@ -18,10 +23,10 @@ def login(
     """Login to a Telegram session."""
     from .. import tasks
 
-    config: Config = ctx.obj["cligram.init:core"]()
+    config: "Config" = ctx.obj["cligram.init:core"]()
     if session:
         config.telegram.session = session
-    app: Application = ctx.obj["cligram.init:app"]()
+    app: "Application" = ctx.obj["cligram.init:app"]()
     app.start(tasks.session.login)
 
 
@@ -30,6 +35,8 @@ def list_sessions(
     ctx: typer.Context,
 ):
     """List all available Telegram sessions."""
+    from .. import CustomSession
+
     ctx.obj["cligram.init:core"]()
     sessions = CustomSession.list_sessions()
     if sessions:
@@ -58,7 +65,7 @@ def logout(
     """Logout from a Telegram session."""
     from .. import tasks
 
-    config: Config = ctx.obj["cligram.init:core"]()
+    config: "Config" = ctx.obj["cligram.init:core"]()
     if session:
         config.telegram.session = session
 
@@ -74,5 +81,5 @@ def logout(
             )
         raise typer.Exit(0 if res else 1)
 
-    app: Application = ctx.obj["cligram.init:app"]()
+    app: "Application" = ctx.obj["cligram.init:app"]()
     app.start(tasks.session.logout)

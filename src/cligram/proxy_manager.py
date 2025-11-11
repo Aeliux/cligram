@@ -4,13 +4,14 @@ import re
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional, Tuple
+from typing import TYPE_CHECKING, List, Optional, Tuple
 
 import socks
 from telethon import TelegramClient, sessions
 from telethon.network import ConnectionTcpMTProxyRandomizedIntermediate
 
-from .config import Config
+if TYPE_CHECKING:
+    from . import Config
 
 
 class ProxyType(Enum):
@@ -114,7 +115,7 @@ class ProxyManager:
 
     @classmethod
     def from_config(
-        cls, config: Config, exclude_direct: bool = False
+        cls, config: "Config", exclude_direct: bool = False
     ) -> "ProxyManager":
         """
         Create ProxyManager instance from application config.

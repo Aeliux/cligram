@@ -8,15 +8,18 @@ import traceback
 from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass
 from io import StringIO
-from typing import Any, Awaitable, Callable, List, Optional
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, List, Optional
 
 from rich.control import Control, ControlType  # type: ignore
 from rich.table import Table
 from telethon import TelegramClient, events, functions, hints
 from telethon.tl.types import Channel, Message, TypeInputPeer, User, Username
 
-from .. import Application, InteractiveMode, utils
+from .. import InteractiveMode, utils
 from . import telegram
+
+if TYPE_CHECKING:
+    from .. import Application
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -575,7 +578,7 @@ class Context:
         """Whether to print announcements."""
         return self._print_announcements
 
-    def __init__(self, app: Application, client: TelegramClient):
+    def __init__(self, app: "Application", client: TelegramClient):
         self.app = app
         self.console = app.console
         self.client = client
@@ -759,13 +762,13 @@ class Context:
                 logger.error(f"Error processing input: {e}")
 
 
-async def main(app: Application):
+async def main(app: "Application"):
     """Interactive task."""
     app.status.update("Starting interactive session...")
     await telegram.setup(app=app, callback=interactive_callback)
 
 
-async def interactive_callback(app: Application, client: TelegramClient):
+async def interactive_callback(app: "Application", client: TelegramClient):
     """Callback for interactive task."""
     app.status.stop()
 
