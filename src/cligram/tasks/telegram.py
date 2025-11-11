@@ -29,6 +29,7 @@ async def setup(
     callback: Callable[[Application, TelegramClient], Coroutine],
     session: Optional[CustomSession] = None,
     proxy: Optional[Proxy] = None,
+    disconnect_expected: bool = False,
 ):
     """Setup Telegram client."""
     setup_logger()
@@ -53,10 +54,13 @@ async def setup(
         finally:
             app.status.update("Shutting down client...")
             if not client.is_connected():
-                logger.warning("Client disconnected unexpectedly")
-                app.console.print(
-                    "Client disconnected unexpectedly", style=Style(color="yellow")
-                )
+                if disconnect_expected:
+                    logger.info("Client disconnected as expected")
+                else:
+                    logger.warning("Client disconnected unexpectedly")
+                    app.console.print(
+                        "Client disconnected unexpectedly", style=Style(color="yellow")
+                    )
                 return
 
             await client(functions.account.UpdateStatusRequest(offline=True))

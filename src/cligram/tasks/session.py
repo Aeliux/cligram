@@ -26,3 +26,19 @@ async def login(app: Application):
 async def login_callback(app: Application, client: TelegramClient):
     """Callback for login task."""
     app.console.print("[green]Logged in successfully![/green]")
+
+
+async def logout(app: Application):
+    """Logout from the current Telegram session."""
+    await telegram.setup(app=app, callback=logout_callback, disconnect_expected=True)
+
+
+async def logout_callback(app: Application, client: TelegramClient):
+    """Callback for logout task."""
+    app.status.update("Logging out...")
+    res = await client.log_out()
+    if not res:
+        app.console.print("[red]Logout failed![/red]")
+        return
+
+    app.console.print("[green]Logged out successfully![/green]")
