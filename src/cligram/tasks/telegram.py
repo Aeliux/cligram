@@ -78,7 +78,7 @@ async def setup(
         raise
 
 
-async def _setup_connection(app: "Application") -> "Proxy" | None:
+async def _setup_connection(app: "Application") -> "Proxy | None":
     from .. import ProxyManager
 
     app.status.update("Testing connections...")

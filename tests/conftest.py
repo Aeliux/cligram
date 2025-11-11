@@ -31,6 +31,7 @@ def sample_config_data() -> Dict:
             "connection": {"direct": True, "proxies": []},
             "startup": {"count_unread_messages": True},
             "session": "test_session",
+            "impersonate": False,
         },
         "scan": {
             "messages": {"source": "me", "limit": 20, "msg_id": None},

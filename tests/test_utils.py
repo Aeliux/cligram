@@ -36,12 +36,12 @@ def test_validate_proxy_direct():
 
 def test_validate_proxy_invalid_none():
     """Test validation of None proxy."""
-    assert validate_proxy(None) is False
+    assert validate_proxy(None) is False  # type: ignore
 
 
 def test_validate_proxy_invalid_type():
     """Test validation of invalid type."""
-    assert validate_proxy("not a proxy") is False
+    assert validate_proxy("not a proxy") is False  # type: ignore
 
 
 def test_validate_proxy_missing_host():

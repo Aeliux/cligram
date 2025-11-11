@@ -338,7 +338,7 @@ class AsyncArchive:
         buffer = io.BytesIO(data)
         entries = {}
 
-        with tarfile.open(fileobj=buffer, mode=self._get_tar_mode("r")) as tar:
+        with tarfile.open(fileobj=buffer, mode=self._get_tar_mode("r")) as tar:  # type: ignore
             for member in tar.getmembers():
                 content = None
                 if member.isfile():
@@ -355,7 +355,7 @@ class AsyncArchive:
         """Build tar archive from entries."""
         buffer = io.BytesIO()
 
-        with tarfile.open(fileobj=buffer, mode=self._get_tar_mode("w")) as tar:
+        with tarfile.open(fileobj=buffer, mode=self._get_tar_mode("w")) as tar:  # type: ignore
             for entry in self._entries.values():
                 tar_info = entry.to_tar_info()
 
