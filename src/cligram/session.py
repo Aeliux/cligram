@@ -1,11 +1,10 @@
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from telethon.sessions import SQLiteSession
 
-from .config import Config
-from .exceptions import SessionMismatchError, SessionNotFoundError
+from . import Config, exceptions, utils
 
 
 def get_search_paths(config: Optional[Config] = None) -> List[Path]:
@@ -48,7 +47,9 @@ class CustomSession(SQLiteSession):
             or "/" in session_id
         ):
             if not session_path.exists() and not create:
-                raise SessionNotFoundError(f"Session file not found: {session_path}")
+                raise exceptions.SessionNotFoundError(
+                    f"Session file not found: {session_path}"
+                )
             super().__init__(str(session_path))
         else:
             # Search in provided paths
@@ -63,7 +64,9 @@ class CustomSession(SQLiteSession):
             # If not found, create in last path
             if found_path is None:
                 if not create:
-                    raise SessionNotFoundError(f"Session file not found: {session_id}")
+                    raise exceptions.SessionNotFoundError(
+                        f"Session file not found: {session_id}"
+                    )
 
                 last_dir = search_paths[-1]
                 last_dir.mkdir(parents=True, exist_ok=True)
@@ -78,7 +81,7 @@ class CustomSession(SQLiteSession):
         if session_api_id is None:
             self.set_metadata("api_id", str(api_id))
         elif session_api_id != api_id:
-            raise SessionMismatchError(
+            raise exceptions.SessionMismatchError(
                 "The session was created with a different API ID."
             )
 
@@ -124,6 +127,17 @@ class CustomSession(SQLiteSession):
         c = self._cursor()
         c.execute("DELETE FROM metadata WHERE key = ?", (key,))
         c.close()
+
+    def set_device_info(self, device_info: utils.DeviceInfo):
+        """Store device information in metadata."""
+        self.set_metadata("device_title", device_info.title)
+        self.set_metadata("device_model", device_info.model)
+
+    def get_device_info(self) -> Tuple[Optional[str], Optional[str]]:
+        """Retrieve device information from metadata."""
+        title = self.get_metadata("device_title", "Unknown Device")
+        model = self.get_metadata("device_model", "Unknown Model")
+        return title, model
 
     @classmethod
     def list_sessions(cls) -> List[str]:

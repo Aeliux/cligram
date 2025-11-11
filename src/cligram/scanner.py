@@ -689,7 +689,10 @@ class TelegramScanner:
             self.app.status.update("Initializing client...")
             # Create actual client with working connection
             client: TelegramClient = utils.get_client(
-                config=self.config, proxy=working_connection, session=session
+                config=self.config,
+                device=self.app.device,
+                proxy=working_connection,
+                session=session,
             )
 
             self.app.status.update("Logging in...")

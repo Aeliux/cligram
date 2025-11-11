@@ -1,8 +1,6 @@
 import typer
 
-from ..app import Application
-from ..config import Config
-from ..session import CustomSession
+from .. import Application, Config, CustomSession, utils
 
 app = typer.Typer(
     help="Manage Telegram sessions",
@@ -65,7 +63,7 @@ def logout(
         config.telegram.session = session
 
     if force:
-        sess = CustomSession(config.telegram.session, create=False)
+        sess = utils.get_session(config=config, create=False)
         res = sess.delete()
         if not res:
             typer.echo(f"[red]Can't delete session {config.telegram.session}.[/red]")

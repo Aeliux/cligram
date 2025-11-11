@@ -299,6 +299,9 @@ class TelegramConfig:
     session: str = "default"
     """Session file name for persistent authorization"""
 
+    impersonate: bool = False
+    """Impersonate device info from session metadata"""
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "TelegramConfig":
         return cls(
@@ -306,6 +309,9 @@ class TelegramConfig:
             connection=ConnectionConfig.from_dict(data.get("connection", {})),
             startup=StartupConfig.from_dict(data.get("startup", {})),
             session=data.get("session", cls.__dataclass_fields__["session"].default),
+            impersonate=data.get(
+                "impersonate", cls.__dataclass_fields__["impersonate"].default
+            ),
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -314,6 +320,7 @@ class TelegramConfig:
             "connection": self.connection.to_dict(),
             "startup": self.startup.to_dict(),
             "session": self.session,
+            "impersonate": self.impersonate,
         }
 
 

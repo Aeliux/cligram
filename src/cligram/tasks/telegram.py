@@ -166,7 +166,7 @@ async def _init_client(
     app.status.update("Initializing client...")
 
     client: TelegramClient = utils.get_client(
-        config=app.config, proxy=proxy, session=session
+        config=app.config, device=app.device, proxy=proxy, session=session
     )
 
     app.status.update("Logging in...")

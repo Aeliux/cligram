@@ -1,4 +1,5 @@
 import datetime
+import logging
 from platform import node, release, system
 from typing import Optional
 
@@ -21,23 +22,46 @@ from telethon.tl.types import (
 from ..config import Config
 from ..proxy_manager import Proxy
 from ..session import CustomSession
+from . import DeviceInfo
+
+logger = logging.getLogger(__name__)
 
 
 def get_client(
-    config: Config, proxy: Optional[Proxy], session: Optional[CustomSession]
+    config: Config,
+    device: DeviceInfo,
+    proxy: Optional[Proxy],
+    session: Optional[CustomSession],
 ) -> TelegramClient:
     """
     Create a Telethon TelegramClient from the given configuration.
     """
     from .. import __version__
 
+    logger.info("Creating Telegram client")
+
+    loaded_session = session or get_session(config)
+
+    title = device.title
+    model = device.model
+
+    if config.telegram.impersonate:
+        # Try to impersonate device info from session metadata
+        it, im = loaded_session.get_device_info()
+        if it and im:
+            title = it
+            model = im
+            logger.info(f"Impersonating device info: {title} on {model}")
+    else:
+        logger.info(f"Using device info: {title} on {model}")
+
     params = {
-        "session": session or get_session(config),
+        "session": loaded_session,
         "api_id": config.telegram.api.id,  # API ID from my.telegram.org
         "api_hash": config.telegram.api.hash,  # API hash from my.telegram.org
         "connection_retries": 2,  # Number of attempts before failing
-        "device_model": node(),  # Real device model
-        "system_version": f"{system()} {release()}",  # Real system details
+        "device_model": model,
+        "system_version": title,
         "app_version": __version__,  # Package version
         "lang_code": "en",  # Language to use for Telegram
         "timeout": 10,  # Timeout in seconds for requests
@@ -49,11 +73,17 @@ def get_client(
     return TelegramClient(**params)
 
 
-def get_session(config: Config, create: bool = False) -> CustomSession:
+def get_session(
+    config: Config, create: bool = False, device: Optional[DeviceInfo] = None
+) -> CustomSession:
     """
     Load a CustomSession based on the configuration.
     """
-    return CustomSession(session_id=config.telegram.session, create=create)
+    session = CustomSession(session_id=config.telegram.session, create=create)
+    if create and device:
+        session.set_device_info(device_info=device)
+
+    return session
 
 
 def get_entity_name(

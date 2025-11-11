@@ -8,7 +8,7 @@ from typing import Callable, Coroutine, Optional
 from rich import get_console
 from rich.status import Status
 
-from . import exceptions
+from . import exceptions, utils
 from .config import Config
 from .state_manager import StateManager
 
@@ -37,6 +37,9 @@ class Application:
     def __init__(self, config: Config):
         self.config = config
         """Application configuration."""
+
+        self.device: utils.DeviceInfo = utils.get_device_info()
+        """Information about the current device/environment."""
 
         self.state = StateManager(data_dir=self.config.data_path)
         """"State manager for application state persistence."""
@@ -156,8 +159,15 @@ class Application:
         self.status.update("Starting application...")
         self.status.start()
 
-        self.console.print(f"[bold green]cligram v{__version__}[/bold green]")
-        logger.info(f"Starting application v{__version__}")
+        text = f"cligram v{__version__}"
+        if self.device.platform == utils.Platform.UNKNOWN:
+            text += " on an unknown thing"
+        elif self.device.platform == utils.Platform.ANDROID:
+            text += " on Android!"
+        self.console.print(f"[bold green]{text}[/bold green]")
+        logger.info(
+            f"Starting cligram application v{__version__} on {self.device.platform.value}"
+        )
 
         self.status.update("Initializing...")
         # Setup platform-specific signal handlers
@@ -180,7 +190,7 @@ class Application:
             self.status.update("Shutting down...")
             await self.state.save()
             await self.state.backup()
-            logger.info("Shutdown complete")
+            logger.info("Application shutdown completed")
             self.status.stop()
             app_instance = None
 
