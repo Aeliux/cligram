@@ -11,7 +11,7 @@ from .. import (
     CustomSession,
     Proxy,
     ProxyManager,
-    SessionNotFoundError,
+    exceptions,
     utils,
 )
 from ..exceptions import NoWorkingConnectionError
@@ -64,7 +64,7 @@ async def setup(
             await client.disconnect()  # type: ignore
             logger.info("Client session closed")
 
-    except SessionNotFoundError as e:
+    except exceptions.SessionNotFoundError as e:
         app.console.print(
             "Session not found:",
             app.config.telegram.session,

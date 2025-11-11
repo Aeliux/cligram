@@ -1,7 +1,10 @@
 import hashlib
 import logging
+import time
 from logging import FileHandler
 from pathlib import Path
+
+from . import DEFAULT_LOGS_PATH, Config
 
 
 class ColoredNameFormatter(logging.Formatter):
@@ -52,7 +55,17 @@ class ColoredNameFormatter(logging.Formatter):
         return result
 
 
-def setup_logger(verbose: bool = False, log_file: str | Path = "cligram.log"):
+def setup_preinit_logger():
+    logging.basicConfig(
+        level=logging.DEBUG,
+        filename=DEFAULT_LOGS_PATH / f"preinit-{get_date()}.log",
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+
+
+def setup_logger(config: Config):
+    log_file = config.base_path / "logs" / f"{get_date()}.log"
+
     logging.basicConfig(
         level=logging.DEBUG,
     )
@@ -72,7 +85,7 @@ def setup_logger(verbose: bool = False, log_file: str | Path = "cligram.log"):
     fh.setFormatter(fh_formatter)
     logger.addHandler(fh)
 
-    if verbose:
+    if config.app.verbose:
         # Add rich logging for console output
         from rich.logging import RichHandler
 
@@ -84,3 +97,7 @@ def setup_logger(verbose: bool = False, log_file: str | Path = "cligram.log"):
         console_formatter = ColoredNameFormatter("%(name)s: %(message)s")
         console_handler.setFormatter(console_formatter)
         logger.addHandler(console_handler)
+
+
+def get_date():
+    return time.strftime("%Y-%m-%d", time.localtime())

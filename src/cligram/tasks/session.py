@@ -1,6 +1,6 @@
 from telethon import TelegramClient
 
-from .. import Application, CustomSession, SessionNotFoundError, utils
+from .. import Application, CustomSession, exceptions, utils
 from . import telegram
 
 
@@ -10,7 +10,7 @@ async def login(app: Application):
     try:
         utils.get_session(app.config, create=False)
         exists = True
-    except SessionNotFoundError:
+    except exceptions.SessionNotFoundError:
         pass
 
     if exists:

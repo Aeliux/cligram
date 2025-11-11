@@ -3,13 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from cligram.config import (
-    GLOBAL_CONFIG_DIR,
-    Config,
-    InteractiveMode,
-    ScanMode,
-    get_search_paths,
-)
+from cligram import GLOBAL_CONFIG_PATH, Config, InteractiveMode, ScanMode
+from cligram.config import get_search_paths
 
 
 def test_config_from_file(config_file, sample_config_data):
@@ -237,8 +232,8 @@ def test_trigger_update(sample_config_data, temp_dir):
 
 
 def test_get_search_paths():
-    assert GLOBAL_CONFIG_DIR == Path.home() / ".cligram"
+    assert GLOBAL_CONFIG_PATH == Path.home() / ".cligram" / "config.json"
     paths = get_search_paths()
     assert isinstance(paths, list)
     assert Path.cwd() in paths
-    assert GLOBAL_CONFIG_DIR in paths
+    assert GLOBAL_CONFIG_PATH.parent in paths

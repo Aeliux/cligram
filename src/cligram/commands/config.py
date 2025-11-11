@@ -2,7 +2,7 @@ from pathlib import Path
 
 import typer
 
-from ..config import GLOBAL_CONFIG_DIR, Config
+from .. import GLOBAL_CONFIG_PATH, Config
 
 app = typer.Typer(help="Configuration management")
 
@@ -24,7 +24,7 @@ def create_config(
 ):
     """Create a default configuration file."""
     if glb:
-        path = GLOBAL_CONFIG_DIR / "config.json"
+        path = GLOBAL_CONFIG_PATH
 
     path = path.resolve()
     if path.exists():

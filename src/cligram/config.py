@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import json
+import logging
 import random
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -8,8 +9,10 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-GLOBAL_CONFIG_DIR = Path.home() / ".cligram"
+from . import GLOBAL_CONFIG_PATH
+
 _config_instance: Optional["Config"] = None
+logger = logging.getLogger(__name__)
 
 
 class ScanMode(Enum):
@@ -207,7 +210,8 @@ class ScanConfig:
                 data.get("mode", cls.__dataclass_fields__["mode"].default.value)
             ),
             targets=data.get(
-                "targets", cls.__dataclass_fields__["targets"].default_factory()  # type: ignore
+                "targets",
+                cls.__dataclass_fields__["targets"].default_factory(),  # type: ignore
             ),
             limit=data.get("limit", cls.__dataclass_fields__["limit"].default),
             test=data.get("test", cls.__dataclass_fields__["test"].default),
@@ -245,7 +249,8 @@ class ConnectionConfig:
                 cls.__dataclass_fields__["direct"].default,
             ),
             proxies=data.get(
-                "proxies", cls.__dataclass_fields__["proxies"].default_factory()  # type: ignore
+                "proxies",
+                cls.__dataclass_fields__["proxies"].default_factory(),  # type: ignore
             ),
         )
 
@@ -414,7 +419,11 @@ class Config:
             if not isinstance(_config_instance, cls):
                 raise TypeError("Configuration instance is of incorrect type.")
 
-        return _config_instance if isinstance(_config_instance, cls) else None  # type: ignore
+        config = _config_instance if isinstance(_config_instance, cls) else None
+        if config is not None:
+            logger.info("Using existing configuration instance.")
+
+        return config  # type: ignore
 
     @classmethod
     def from_file(
@@ -423,14 +432,18 @@ class Config:
         overrides: Optional[List[str]] = None,
     ) -> "Config":
         """Load configuration from JSON file with CLI overrides."""
+        logger.info(f"Loading configuration from file: {config_path}")
         config_full_path = Path(config_path).resolve()
         if not config_full_path.exists():
+            logger.error(f"Configuration file not found: {config_path}")
             raise FileNotFoundError(f"Configuration file not found: {config_path}")
 
         with open(config_full_path, "r") as f:
             original_data = json.load(f)
+        logger.info("Configuration file loaded successfully.")
 
         # Parse main sections
+        logger.info("Parsing configuration")
         config = cls(
             app=AppConfig.from_dict(original_data.get("app", {})),
             telegram=TelegramConfig.from_dict(original_data.get("telegram", {})),
@@ -443,19 +456,25 @@ class Config:
 
         # Apply overrides
         if overrides:
+            logger.info("Applying configuration overrides")
             for override in overrides:
+                logger.debug(f"Applying override: {override}")
                 config.apply_override(override)
             config.overridden = True
 
         # Check if config structure changed (new fields added)
         new_data = config.to_dict()
         if not cls._config_equal(original_data, new_data):
+            logger.info("Configuration structure changed, updating config file")
             config._update_config(original_data)
             config.updated = True
 
         if not cls.get_config(raise_if_failed=False):
             global _config_instance
             _config_instance = config
+            logger.info("Configuration instance set.")
+        else:
+            logger.info("The configuration instance already exists; not overwriting.")
 
         return config
 
@@ -471,17 +490,24 @@ class Config:
             ValueError: If override string is invalid
         """
         if "=" not in override_str:
+            logger.error(
+                f"Invalid override format: {override_str}. Expected 'key=value'"
+            )
             raise ValueError(
                 f"Invalid override format: {override_str}. Expected 'key=value'"
             )
 
         path, value_str = override_str.split("=", 1)
         if not value_str.strip():
+            logger.error(f"Invalid override format: {override_str}. Missing value.")
             raise ValueError(f"Invalid override format: {override_str}. Missing value.")
         path = path.strip()
 
+        logger.debug("Override format is valid")
+
         # Parse value
         value = self._parse_value(value_str)
+        logger.debug(f"Parsed override value: {value} (type: {type(value)})")
 
         # Apply override
         self._set_nested_value(path, value)
@@ -497,20 +523,22 @@ class Config:
 
     def save(self, path: Optional[Path | str] = None):
         """Save configuration to JSON file."""
-        if self.overridden:
-            raise RuntimeError(
-                "Cannot save configuration that has been overridden via CLI."
-            )
-
         save_path = Path(path) if path else self.path
+        logger.info(f"Saving configuration to file: {save_path}")
+
+        if self.overridden:
+            logger.error("Configuration has been overridden.")
+            raise RuntimeError("Configuration has been overridden.")
+
         save_path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(save_path, "w") as f:
             json.dump(self.to_dict(), f, indent=2)
 
+        logger.info("Configuration saved successfully.")
+
     def _parse_value(self, value_str: str) -> Any:
         """Parse string value to appropriate Python type."""
-        # Boolean
         value_str = value_str.strip()
 
         if value_str.lower() in ("true", "yes", "1"):
@@ -558,22 +586,31 @@ class Config:
         Raises:
             ValueError: If path is invalid
         """
+        logger.debug(f"Setting nested configuration value: {path} = {value}")
         parts = path.split(".")
 
         if len(parts) < 2:
-            raise ValueError(f"Invalid path: {path}. Must have at least one dot.")
+            logger.error(f"Cannot set top-level configuration directly: {path}")
+            raise ValueError(f"Cannot set top-level configuration directly: {path}")
 
         # Navigate to parent object
         obj = self
         for part in parts[:-1]:
             if not hasattr(obj, part):
+                logger.error(f"Invalid path: {path}. '{part}' not found.")
                 raise ValueError(f"Invalid path: {path}. '{part}' not found.")
             obj = getattr(obj, part)
 
         # Set the final value
         attr = parts[-1]
         if not hasattr(obj, attr):
+            logger.error(f"Invalid path: {path}. '{attr}' not found.")
             raise ValueError(f"Invalid path: {path}. '{attr}' not found.")
+
+        # Guard against overriding non-data fields
+        if callable(getattr(obj, attr)):
+            logger.error(f"Cannot override method or callable attribute: {path}")
+            raise ValueError(f"Cannot override method or callable attribute: {path}")
 
         # Type conversion for enums
         if hasattr(obj.__class__, "__dataclass_fields__"):
@@ -650,6 +687,7 @@ class Config:
 
     def _update_config(self, old_data: Dict[str, Any]):
         # Migrate existing config keys to new structure
+        logger.info("Migrating existing config keys to new structure")
         if old_data.get("app", {}).get("rapid_save") is not None:
             self.scan.rapid_save = old_data["app"]["rapid_save"]
         if old_data.get("telegram", {}).get("proxies") is not None:
@@ -664,32 +702,41 @@ class Config:
         backup_path = (
             self.path.parent / f"{self.path.stem}.backup.{timestamp}{self.path.suffix}"
         )
-
+        logger.info(f"Creating backup of old config at: {backup_path}")
         with open(backup_path, "w") as f:
             json.dump(old_data, f, indent=2)
+        logger.info(f"Backup created at: {backup_path}")
 
+        logger.info(f"Saving updated config to: {self.path}")
         # Save updated config
         with open(self.path, "w") as f:
             json.dump(new_data, f, indent=2)
+        logger.info(f"Updated config saved to: {self.path}")
 
 
 def get_search_paths() -> List[Path]:
     """Get a list of all configuration search paths."""
-    return [Path.cwd(), GLOBAL_CONFIG_DIR]
+    return [Path.cwd(), GLOBAL_CONFIG_PATH.parent]
 
 
 def find_config_file(raise_error: bool = False) -> Optional[Path]:  # pragma: no cover
     """Search for configuration file in standard locations."""
     search_paths = get_search_paths()
     config_filenames = ["config.json", "cligram_config.json"]
+    logger.info(f"Searching for configuration files in: {search_paths}")
 
     for search_dir in search_paths:
         for filename in config_filenames:
             candidate = search_dir / filename
             if candidate.exists():
+                logger.info(f"Found configuration file: {candidate}")
                 return candidate.resolve()
+            else:
+                logger.debug(f"Configuration file not found at: {candidate}")
 
     if raise_error:
-        raise FileNotFoundError("No configuration file found in standard locations.")
+        logger.error(f"No configuration file found in {search_paths}.")
+        raise FileNotFoundError("No configuration file found in expected locations.")
 
+    logger.warning(f"No configuration file found in {search_paths}.")
     return None

@@ -1,14 +1,15 @@
-import time
+import logging
 from pathlib import Path
 from typing import List, Optional
 
 import typer
 from click import FileError
 
-from . import commands, utils
-from .app import Application
-from .config import Config, ScanMode, find_config_file
-from .logger import setup_logger
+from . import Application, Config, ScanMode, commands, utils
+from .config import find_config_file
+from .logger import setup_logger, setup_preinit_logger
+
+logger = logging.getLogger(__name__)
 
 
 def validate_config_path(value: Path) -> Path:
@@ -151,6 +152,10 @@ def callback(
     """
     CLI entry point for cligram application.
     """
+    setup_preinit_logger()
+
+    logger.info("Starting cligram CLI")
+
     ctx.obj = {}
 
     def setup() -> Config:
@@ -164,15 +169,14 @@ def callback(
             raise FileError("Configuration file not found.")
 
         loaded_config = Config.from_file(config, overrides=overrides)
-        if verbose:
+        if verbose and not loaded_config.app.verbose:
+            loaded_config.overridden = True
             loaded_config.app.verbose = True
 
-        setup_logger(
-            verbose=loaded_config.app.verbose,
-            log_file=loaded_config.base_path
-            / "logs"
-            / time.strftime("%Y-%m-%d.log", time.localtime()),
-        )
+        logger.info("Configuration loaded successfully.")
+        logger.info("pre-init complete, setting up logger")
+
+        setup_logger(loaded_config)
 
         return loaded_config
 
