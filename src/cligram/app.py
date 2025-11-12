@@ -40,7 +40,7 @@ class Application:
         """Application configuration."""
 
         self.device: utils.DeviceInfo = utils.get_device_info()
-        """Information about the current device/environment."""
+        """Information about the current device."""
 
         self.state = StateManager(data_dir=self.config.data_path)
         """"State manager for application state persistence."""
