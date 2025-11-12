@@ -9,7 +9,9 @@ import sys
 from common import PROJECT_ROOT, print_summary, run_command
 
 
-def run_coverage(html: bool = False, xml: bool = False, term: bool = True) -> bool:
+def run_coverage(
+    html: bool = False, xml: bool = False, junit: bool = False, term: bool = True
+) -> bool:
     """Run pytest with coverage."""
     cmd = ["pytest", "--cov=cligram", "--cov-report=term-missing"]
 
@@ -18,6 +20,9 @@ def run_coverage(html: bool = False, xml: bool = False, term: bool = True) -> bo
 
     if xml:
         cmd.append("--cov-report=xml")
+
+    if junit:
+        cmd.extend(["--junitxml=junit.xml", "-o", "junit_family=legacy"])
 
     if not term:
         # Remove term-missing if terminal output is disabled
@@ -38,6 +43,9 @@ def main():
         "--xml", action="store_true", help="Generate XML coverage report"
     )
     parser.add_argument(
+        "--junit", action="store_true", help="Generate JUnit coverage report"
+    )
+    parser.add_argument(
         "--no-term", action="store_true", help="Disable terminal output"
     )
     parser.add_argument(
@@ -49,10 +57,11 @@ def main():
     # Determine which reports to generate
     html = args.all or args.html
     xml = args.all or args.xml
+    junit = args.all or args.junit
     term = not args.no_term
 
     results = {}
-    results["coverage"] = run_coverage(html=html, xml=xml, term=term)
+    results["coverage"] = run_coverage(html=html, xml=xml, junit=junit, term=term)
 
     print_summary(results, success_msg="COMPLETED", fail_msg="FAILED")
 
