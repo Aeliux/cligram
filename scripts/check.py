@@ -40,6 +40,13 @@ def check_pip_audit() -> bool:
     return run_command(["pip-audit"], "Pip-audit dependency vulnerability check")
 
 
+def check_pydocstyle() -> bool:
+    """Run pydocstyle for docstring style checking."""
+    return run_command(
+        ["pydocstyle", "src/cligram"], "Pydocstyle docstring style check"
+    )
+
+
 def check_pytest() -> bool:
     """Run pytest test suite."""
     return run_command(["pytest", "tests", "-v"], "Pytest test suite")
@@ -56,6 +63,9 @@ def main():
     parser.add_argument("--mypy", action="store_true", help="Run mypy check")
     parser.add_argument("--bandit", action="store_true", help="Run bandit check")
     parser.add_argument("--audit", action="store_true", help="Run pip-audit check")
+    parser.add_argument(
+        "--pydocstyle", action="store_true", help="Run pydocstyle check"
+    )
     parser.add_argument("--test", action="store_true", help="Run pytest")
     parser.add_argument("--all", action="store_true", help="Run all checks (default)")
 
@@ -70,6 +80,7 @@ def main():
             args.mypy,
             args.bandit,
             args.audit,
+            args.pydocstyle,
             args.test,
         ]
     )
@@ -93,6 +104,9 @@ def main():
 
     if run_all or args.audit:
         results["audit"] = check_pip_audit()
+
+    if run_all or args.pydocstyle:
+        results["pydocstyle"] = check_pydocstyle()
 
     if run_all or args.test:
         results["test"] = check_pytest()
