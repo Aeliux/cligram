@@ -83,7 +83,7 @@ def set_config(
     """Set a specific configuration value."""
     config: Config = ctx.obj["cligram.init:core"]()
     parsed_value = config._parse_value(value)
-    config._set_nested_value(key, parsed_value)
+    config.set_nested_value(key, parsed_value)
     config.save()
     nvalue = config.get_nested_value(key)
     typer.echo(f"{key}={nvalue}")

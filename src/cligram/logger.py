@@ -1,3 +1,5 @@
+"""Logger setup with colored logger names using Rich markup."""
+
 import hashlib
 import logging
 import time
@@ -12,7 +14,7 @@ if TYPE_CHECKING:
 
 
 class ColoredNameFormatter(logging.Formatter):
-    """Formatter that assigns consistent colors to logger names using Rich markup."""
+    """Logging formatter with colored logger names using Rich markup."""
 
     # Rich color palette for logger names (distinct, readable colors)
     COLORS = [
@@ -34,6 +36,7 @@ class ColoredNameFormatter(logging.Formatter):
     ]
 
     def __init__(self, fmt=None, datefmt=None, style="%"):
+        """Initialize the ColoredNameFormatter."""
         super().__init__(fmt, datefmt, style)  # type: ignore
         self._color_cache = {}
 
@@ -47,6 +50,7 @@ class ColoredNameFormatter(logging.Formatter):
         return self._color_cache[name]
 
     def format(self, record):
+        """Format the log record with colored logger name."""
         # Color the logger name
         original_name = record.name
         color = self._get_color_for_name(original_name)
@@ -60,15 +64,25 @@ class ColoredNameFormatter(logging.Formatter):
 
 
 def setup_preinit_logger():
+    """Setup a basic logger for pre-init stage logging.
+
+    it creates a log file in the default logs path
+    with the preinit prefix and current date.
+    """
     logging.basicConfig(
         level=logging.DEBUG,
-        filename=DEFAULT_LOGS_PATH / f"preinit-{get_date()}.log",
+        filename=DEFAULT_LOGS_PATH / f"preinit-{_get_date()}.log",
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
 
 def setup_logger(config: "Config"):
-    log_file = config.base_path / "logs" / f"{get_date()}.log"
+    """Setup the logger based on the provided configuration.
+
+    Args:
+        config (Config): The configuration object containing logging settings.
+    """
+    log_file = config.base_path / "logs" / f"{_get_date()}.log"
 
     logging.basicConfig(
         level=logging.DEBUG,
@@ -103,5 +117,6 @@ def setup_logger(config: "Config"):
         logger.addHandler(console_handler)
 
 
-def get_date():
+def _get_date():
+    """Get the current date as a string in YYYY-MM-DD format."""
     return time.strftime("%Y-%m-%d", time.localtime())

@@ -1,3 +1,5 @@
+"""Application configuration management."""
+
 import base64
 import hashlib
 import json
@@ -8,6 +10,7 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Tuple, overload
+from warnings import deprecated
 
 from . import GLOBAL_CONFIG_PATH, exceptions
 
@@ -15,6 +18,7 @@ _config_instance: Optional["Config"] = None
 logger = logging.getLogger(__name__)
 
 
+@deprecated("Unmaintained")
 class ScanMode(Enum):
     """Operation modes for the scanner."""
 
@@ -56,13 +60,13 @@ class ApiConfig:
         return base64.urlsafe_b64encode(digest).decode("utf-8")[:8]
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ApiConfig":
+    def _from_dict(cls, data: Dict[str, Any]) -> "ApiConfig":
         return cls(
             id=data.get("id", cls.__dataclass_fields__["id"].default),
             hash=data.get("hash", cls.__dataclass_fields__["hash"].default),
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def _to_dict(self) -> Dict[str, Any]:
         return {"id": self.id, "hash": self.hash}
 
 
@@ -81,13 +85,13 @@ class DelayConfig:
         return random.uniform(self.min, self.max)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "DelayConfig":
+    def _from_dict(cls, data: Dict[str, Any]) -> "DelayConfig":
         return cls(
             min=data.get("min", cls.__dataclass_fields__["min"].default),
             max=data.get("max", cls.__dataclass_fields__["max"].default),
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def _to_dict(self) -> Dict[str, Any]:
         return {"min": self.min, "max": self.max}
 
 
@@ -102,14 +106,14 @@ class LongDelayConfig(DelayConfig):
     """Probability (0-1) of taking a long delay instead of normal delay"""
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "LongDelayConfig":
+    def _from_dict(cls, data: Dict[str, Any]) -> "LongDelayConfig":
         return cls(
             min=data.get("min", cls.__dataclass_fields__["min"].default),
             max=data.get("max", cls.__dataclass_fields__["max"].default),
             chance=data.get("chance", cls.__dataclass_fields__["chance"].default),
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def _to_dict(self) -> Dict[str, Any]:
         return {"min": self.min, "max": self.max, "chance": self.chance}
 
 
@@ -124,8 +128,7 @@ class DelaysConfig:
     """Long break delay settings"""
 
     def random(self) -> float:
-        """
-        Generate a random delay based on configured normal and long delays.
+        """Generate a random delay based on configured normal and long delays.
 
         Returns:
             float: Random delay duration in seconds
@@ -140,14 +143,14 @@ class DelaysConfig:
         return delay
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "DelaysConfig":
+    def _from_dict(cls, data: Dict[str, Any]) -> "DelaysConfig":
         return cls(
-            normal=DelayConfig.from_dict(data.get("normal", {})),
-            long=LongDelayConfig.from_dict(data.get("long", {})),
+            normal=DelayConfig._from_dict(data.get("normal", {})),
+            long=LongDelayConfig._from_dict(data.get("long", {})),
         )
 
-    def to_dict(self) -> Dict[str, Any]:
-        return {"normal": self.normal.to_dict(), "long": self.long.to_dict()}
+    def _to_dict(self) -> Dict[str, Any]:
+        return {"normal": self.normal._to_dict(), "long": self.long._to_dict()}
 
 
 @dataclass
@@ -169,14 +172,14 @@ class MessagesConfig:
         return self.msg_id is None
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "MessagesConfig":
+    def _from_dict(cls, data: Dict[str, Any]) -> "MessagesConfig":
         return cls(
             source=data.get("source", cls.__dataclass_fields__["source"].default),
             limit=data.get("limit", cls.__dataclass_fields__["limit"].default),
             msg_id=data.get("msg_id", cls.__dataclass_fields__["msg_id"].default),
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def _to_dict(self) -> Dict[str, Any]:
         return {"source": self.source, "limit": self.limit, "msg_id": self.msg_id}
 
 
@@ -203,9 +206,9 @@ class ScanConfig:
     """Enable rapid state saving to disk"""
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ScanConfig":
+    def _from_dict(cls, data: Dict[str, Any]) -> "ScanConfig":
         return cls(
-            messages=MessagesConfig.from_dict(data.get("messages", {})),
+            messages=MessagesConfig._from_dict(data.get("messages", {})),
             mode=ScanMode(
                 data.get("mode", cls.__dataclass_fields__["mode"].default.value)
             ),
@@ -220,9 +223,9 @@ class ScanConfig:
             ),
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def _to_dict(self) -> Dict[str, Any]:
         return {
-            "messages": self.messages.to_dict(),
+            "messages": self.messages._to_dict(),
             "mode": self.mode.value,
             "targets": self.targets,
             "limit": self.limit,
@@ -242,7 +245,7 @@ class ConnectionConfig:
     """List of proxy URLs to try for connection"""
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ConnectionConfig":
+    def _from_dict(cls, data: Dict[str, Any]) -> "ConnectionConfig":
         return cls(
             direct=data.get(
                 "direct",
@@ -254,7 +257,7 @@ class ConnectionConfig:
             ),
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def _to_dict(self) -> Dict[str, Any]:
         return {
             "direct": self.direct,
             "proxies": self.proxies,
@@ -269,7 +272,7 @@ class StartupConfig:
     """Show unread messages count on startup"""
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "StartupConfig":
+    def _from_dict(cls, data: Dict[str, Any]) -> "StartupConfig":
         return cls(
             count_unread_messages=data.get(
                 "count_unread_messages",
@@ -277,7 +280,7 @@ class StartupConfig:
             ),
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def _to_dict(self) -> Dict[str, Any]:
         return {
             "count_unread_messages": self.count_unread_messages,
         }
@@ -303,22 +306,22 @@ class TelegramConfig:
     """Impersonate device info from session metadata"""
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "TelegramConfig":
+    def _from_dict(cls, data: Dict[str, Any]) -> "TelegramConfig":
         return cls(
-            api=ApiConfig.from_dict(data.get("api", {})),
-            connection=ConnectionConfig.from_dict(data.get("connection", {})),
-            startup=StartupConfig.from_dict(data.get("startup", {})),
+            api=ApiConfig._from_dict(data.get("api", {})),
+            connection=ConnectionConfig._from_dict(data.get("connection", {})),
+            startup=StartupConfig._from_dict(data.get("startup", {})),
             session=data.get("session", cls.__dataclass_fields__["session"].default),
             impersonate=data.get(
                 "impersonate", cls.__dataclass_fields__["impersonate"].default
             ),
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def _to_dict(self) -> Dict[str, Any]:
         return {
-            "api": self.api.to_dict(),
-            "connection": self.connection.to_dict(),
-            "startup": self.startup.to_dict(),
+            "api": self.api._to_dict(),
+            "connection": self.connection._to_dict(),
+            "startup": self.startup._to_dict(),
             "session": self.session,
             "impersonate": self.impersonate,
         }
@@ -335,15 +338,15 @@ class AppConfig:
     """Enable debug logging"""
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "AppConfig":
+    def _from_dict(cls, data: Dict[str, Any]) -> "AppConfig":
         return cls(
-            delays=DelaysConfig.from_dict(data.get("delays", {})),
+            delays=DelaysConfig._from_dict(data.get("delays", {})),
             verbose=data.get("verbose", cls.__dataclass_fields__["verbose"].default),
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def _to_dict(self) -> Dict[str, Any]:
         return {
-            "delays": self.delays.to_dict(),
+            "delays": self.delays._to_dict(),
             "verbose": self.verbose,
         }
 
@@ -366,14 +369,14 @@ class InteractiveConfig:
     """The interactive mode to use"""
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "InteractiveConfig":
+    def _from_dict(cls, data: Dict[str, Any]) -> "InteractiveConfig":
         return cls(
             mode=InteractiveMode(
                 data.get("mode", cls.__dataclass_fields__["mode"].default.value)
             )
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def _to_dict(self) -> Dict[str, Any]:
         return {
             "mode": self.mode.value,
         }
@@ -417,8 +420,16 @@ class Config:
         """Get data directory path."""
         return self.base_path / "data"
 
+    @overload
     @classmethod
-    def get_config(cls, raise_if_failed: bool = True) -> "Config":
+    def get_config(cls, raise_if_failed: Literal[True]) -> "Config": ...
+
+    @overload
+    @classmethod
+    def get_config(cls, raise_if_failed: Literal[False]) -> Optional["Config"]: ...
+
+    @classmethod
+    def get_config(cls, raise_if_failed: bool = True) -> Optional["Config"]:
         """Get application configurations."""
         if raise_if_failed:
             if _config_instance is None:
@@ -438,7 +449,7 @@ class Config:
         config_path: str | Path = "config.json",
         overrides: Optional[List[str]] = None,
     ) -> "Config":
-        """Load configuration from JSON file with CLI overrides."""
+        """Load configuration from JSON file."""
         logger.info(f"Loading configuration from file: {config_path}")
         config_full_path = Path(config_path).resolve()
         if not config_full_path.exists():
@@ -452,10 +463,10 @@ class Config:
         # Parse main sections
         logger.info("Parsing configuration")
         config = cls(
-            app=AppConfig.from_dict(original_data.get("app", {})),
-            telegram=TelegramConfig.from_dict(original_data.get("telegram", {})),
-            scan=ScanConfig.from_dict(original_data.get("scan", {})),
-            interactive=InteractiveConfig.from_dict(
+            app=AppConfig._from_dict(original_data.get("app", {})),
+            telegram=TelegramConfig._from_dict(original_data.get("telegram", {})),
+            scan=ScanConfig._from_dict(original_data.get("scan", {})),
+            interactive=InteractiveConfig._from_dict(
                 original_data.get("interactive", {})
             ),
             path=config_full_path,
@@ -486,8 +497,7 @@ class Config:
         return config
 
     def apply_override(self, override_str: str):
-        """
-        Apply a configuration override using dot notation.
+        """Apply a configuration override using dot notation.
 
         Args:
             override_str: Override string in format "path.to.key=value"
@@ -517,15 +527,15 @@ class Config:
         logger.debug(f"Parsed override value: {value} (type: {type(value)})")
 
         # Apply override
-        self._set_nested_value(path, value)
+        self.set_nested_value(path, value)
 
     def to_dict(self) -> Dict[str, Any]:
         """Export configuration as dictionary."""
         return {
-            "app": self.app.to_dict(),
-            "telegram": self.telegram.to_dict(),
-            "scan": self.scan.to_dict(),
-            "interactive": self.interactive.to_dict(),
+            "app": self.app._to_dict(),
+            "telegram": self.telegram._to_dict(),
+            "scan": self.scan._to_dict(),
+            "interactive": self.interactive._to_dict(),
         }
 
     def save(self, path: Optional[Path | str] = None):
@@ -582,9 +592,8 @@ class Config:
 
         return value_str
 
-    def _set_nested_value(self, path: str, value: Any):
-        """
-        Set a nested configuration value using dot notation.
+    def set_nested_value(self, path: str, value: Any):
+        """Set a nested configuration value using dot notation.
 
         Args:
             path: Dot-separated path to value (e.g., "app.verbose")
@@ -631,8 +640,7 @@ class Config:
         setattr(obj, attr, value)
 
     def get_nested_value(self, path: str) -> Any:
-        """
-        Get a nested configuration value using dot notation.
+        """Get a nested configuration value using dot notation.
 
         Args:
             path: Dot-separated path to value (e.g., "app.verbose")
@@ -657,8 +665,7 @@ class Config:
     def _flatten_dict(
         d: Dict[str, Any], parent_key: str = "", sep: str = "."
     ) -> Dict[str, Any]:
-        """
-        Flatten a nested dictionary.
+        """Flatten a nested dictionary.
 
         Args:
             d: Dictionary to flatten
@@ -679,8 +686,7 @@ class Config:
 
     @staticmethod
     def _config_equal(old: Dict[str, Any], new: Dict[str, Any]) -> bool:
-        """
-        Compare two configuration dictionaries for structural equality.
+        """Compare two configuration dictionaries for structural equality.
 
         Returns True if they have the same structure (keys), ignoring values.
         This detects when new fields are added to the config schema.

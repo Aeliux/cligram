@@ -1,3 +1,5 @@
+"""CLI entry point."""
+
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional
@@ -133,9 +135,7 @@ def callback(
         help="Override config values using dot notation (e.g., app.verbose=true)",
     ),
 ):
-    """
-    CLI entry point for cligram application.
-    """
+    """CLI context setup."""
     setup_preinit_logger()
 
     logger.info("Starting cligram CLI")
@@ -150,17 +150,22 @@ def callback(
 
 
 def init(ctx: typer.Context) -> "Config":
-    """
-    Initialize core components based on CLI context.
-    After this function is called, the pre-init stage is over, configuration is guaranteed to be loaded, logger is set up, and ready for use.
+    """Initialize core components based on CLI context.
+
+    Once this function is called, the pre-init stage is over,
+    configuration is guaranteed to be loaded, logger is set up, and ready for use.
 
     Returns:
         Config: Loaded configuration instance.
     """
     from .config import Config, find_config_file
 
-    if Config.get_config(raise_if_failed=False) is not None:
-        return Config.get_config()
+    lconfig = Config.get_config(raise_if_failed=False)
+    if lconfig is not None:
+        typer.echo(
+            "[yellow]Warning:[/yellow] Configuration was already loaded. Using existing configuration."
+        )
+        return lconfig
     config: Optional[Path] = ctx.obj["cligram.args:config"]
 
     try:
@@ -186,7 +191,8 @@ def init(ctx: typer.Context) -> "Config":
 
 
 def init_app(ctx: typer.Context) -> "Application":
-    """
+    """Safely initialize the main application instance.
+
     Ensures the core is initialized, then
     Initialize the main application instance based on CLI context.
 
@@ -200,4 +206,5 @@ def init_app(ctx: typer.Context) -> "Application":
 
 
 def main():
+    """Main entry point for the CLI."""
     app()

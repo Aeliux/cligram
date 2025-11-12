@@ -104,9 +104,7 @@ def add_proxy(
         False, "--skip-test", help="Skip testing the proxy before adding"
     ),
 ):
-    """
-    Add a new proxy to the configuration.
-    """
+    """Add a new proxy to the configuration."""
     config: "Config" = ctx.obj["cligram.init:core"]()
     proxy_manager = ProxyManager()
 
@@ -152,9 +150,7 @@ def list_proxies(
         False, "--show-url", help="Show full proxy URL in the output"
     ),
 ):
-    """
-    List all configured proxies.
-    """
+    """List all configured proxies."""
     config: "Config" = ctx.obj["cligram.init:core"]()
     proxy_manager = ProxyManager.from_config(config)
 
@@ -185,9 +181,7 @@ def test_proxies(
         False, "--oneshot", help="Stop testing after the first successful proxy"
     ),
 ):
-    """
-    Test all configured proxies and report their status.
-    """
+    """Test all configured proxies and report their status."""
     config: "Config" = ctx.obj["cligram.init:core"]()
     proxy_manager = ProxyManager.from_config(config)
 
@@ -213,9 +207,7 @@ def remove_proxy(
         False, "--unreachable", "-u", help="Remove all unreachable proxies"
     ),
 ):
-    """
-    Remove a proxy from the configuration.
-    """
+    """Remove a proxy from the configuration."""
     config: "Config" = ctx.obj["cligram.init:core"]()
 
     unreachable_proxies: List[str] = []

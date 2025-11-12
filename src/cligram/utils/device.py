@@ -295,13 +295,11 @@ class MacOSDetector:
 
 
 def get_device_info(no_cache=False) -> DeviceInfo:
-    """
-    Get comprehensive device information across all supported platforms.
+    """Get comprehensive device information across all supported platforms.
 
     Returns:
         DeviceInfo: Complete device information including platform, architecture, and environment.
     """
-
     global _device_cache
     if not no_cache and isinstance(_device_cache, DeviceInfo):
         return _device_cache

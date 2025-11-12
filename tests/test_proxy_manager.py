@@ -53,7 +53,7 @@ def test_proxy_parse_tg_link():
 def test_proxy_direct():
     """Test direct connection proxy."""
     manager = ProxyManager()
-    manager.add_direct_proxy()
+    manager._add_direct_proxy()
 
     assert len(manager.proxies) == 1
     assert manager.proxies[0].is_direct
@@ -81,7 +81,7 @@ def test_proxy_export_mtproto():
         secret="abcd1234",
     )
 
-    export = proxy.export()
+    export = proxy._export()
     assert "connection" in export
     assert "proxy" in export
     assert export["proxy"][0] == "host"
@@ -99,7 +99,7 @@ def test_proxy_export_socks5():
         password="pass",
     )
 
-    export = proxy.export()
+    export = proxy._export()
     assert "proxy" in export
     assert export["proxy"][1] == "host"
     assert export["proxy"][2] == 1080

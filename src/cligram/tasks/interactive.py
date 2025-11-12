@@ -396,8 +396,7 @@ class PythonExecutor:
             self.locals["_"] = result
 
     def _await_helper(self, coro):
-        """
-        Helper function to await a coroutine and get its result.
+        """Helper function to await a coroutine and get its result.
         Creates a task and returns a TaskAwaiter object that can be used to get the result.
 
         Usage:
@@ -425,8 +424,7 @@ class PythonExecutor:
         return awaiter
 
     async def execute(self, code: str) -> tuple[bool, str]:
-        """
-        Execute Python code and return (success, output).
+        """Execute Python code and return (success, output).
 
         Args:
             code: Python code to execute
@@ -526,8 +524,7 @@ class TaskAwaiter:
         return self.task.done()
 
     def result(self):
-        """
-        Get the result of the task. Blocks if not done yet.
+        """Get the result of the task. Blocks if not done yet.
 
         Returns:
             The result of the coroutine
@@ -595,9 +592,7 @@ class Context:
         self._missed_announcements: asyncio.Queue = asyncio.Queue()
 
     async def start(self):
-        """
-        Start the interactive session.
-        """
+        """Start the interactive session."""
         await self.input_handler.start()
         self._input_processor_task = asyncio.create_task(self._process_input())
 
@@ -607,10 +602,7 @@ class Context:
         await self.set_mode(self.app.config.interactive.mode)
 
     async def stop(self):
-        """
-        Stop the interactive session.
-        """
-
+        """Stop the interactive session."""
         if self._input_processor_task:
             self._input_processor_task.cancel()
             try:
@@ -621,10 +613,7 @@ class Context:
         self.console.print("[green]Interactive session ended[/green]")
 
     def set_prompt(self, source: InteractiveMode, prompt: str | None):
-        """
-        Set the input prompt for the given interactive mode.
-        """
-
+        """Set the input prompt for the given interactive mode."""
         if source == InteractiveMode.CLIGRAM:
             self._cmd_prompt = prompt
 
@@ -637,10 +626,7 @@ class Context:
             self.input_handler._prompt_text = "python"
 
     async def set_mode(self, mode: InteractiveMode):
-        """
-        Set the interactive mode.
-        """
-
+        """Set the interactive mode."""
         self._mode = mode
 
         if self._mode == InteractiveMode.CLIGRAM:
@@ -653,9 +639,7 @@ class Context:
         self._update_prompt()
 
     async def set_print_announcements(self, value: bool):
-        """
-        Enable or disable printing announcements.
-        """
+        """Enable or disable printing announcements."""
         if value == self._print_announcements:
             return
         self._print_announcements = value
@@ -674,8 +658,7 @@ class Context:
         self,
         message: str,
     ):
-        """
-        Announce a message to the user, if announcements are enabled.
+        """Announce a message to the user, if announcements are enabled.
         Otherwise, queue the message for later.
 
         Args:
@@ -690,8 +673,7 @@ class Context:
         self.input_handler.print_prompt()
 
     async def flush_missed_announcements(self):
-        """
-        Flush all missed announcements.
+        """Flush all missed announcements.
 
         Raises:
             RuntimeError: If announcements are disabled.
@@ -709,8 +691,7 @@ class Context:
         entity: hints.Entity,
         text: Optional[str] = None,
     ):
-        """
-        Announce an event from a Telegram entity.
+        """Announce an event from a Telegram entity.
 
         Args:
             event: The event name.

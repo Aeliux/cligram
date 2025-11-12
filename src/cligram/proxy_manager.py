@@ -1,3 +1,5 @@
+"""Proxy management and testing for Telegram connections."""
+
 import asyncio
 import base64
 import re
@@ -15,24 +17,21 @@ if TYPE_CHECKING:
 
 
 class ProxyType(Enum):
-    """
-    Type of proxy connection supported by the application.
-
-    Variants:
-        MTPROTO: Telegram's native MTProto proxy protocol
-        SOCKS5: SOCKS5 proxy protocol with optional authentication
-        DIRECT: Direct connection without proxy
-    """
+    """Type of proxy connection supported by the application."""
 
     MTPROTO = "mtproto"
+    """MTProto proxy protocol used by Telegram."""
+
     SOCKS5 = "socks5"
+    """SOCKS5 proxy protocol with optional authentication."""
+
     DIRECT = "direct"
+    """Direct connection without proxy."""
 
 
 @dataclass
 class Proxy:
-    """
-    Proxy connection configuration.
+    """Proxy connection configuration.
 
     Supports both MTProto and SOCKS5 protocols with their respective
     authentication methods. For MTProto, requires secret key; for SOCKS5,
@@ -65,12 +64,11 @@ class Proxy:
         """Check if the proxy is a direct connection."""
         return self.type == ProxyType.DIRECT
 
-    def export(self):
-        """
-        Export proxy configuration for Telethon client.
+    def _export(self):
+        """Export proxy configuration for Telethon client.
 
         Returns:
-            dict: Client-compatible proxy configuration parameters
+            dict: Telethon Client-compatible proxy configuration parameters
         """
         params = {}
 
@@ -90,6 +88,7 @@ class Proxy:
         return params
 
     def __eq__(self, other: object) -> bool:
+        """Check equality between two Proxy instances."""
         if not isinstance(other, Proxy):
             return False
         if self.type == ProxyType.DIRECT and other.type == ProxyType.DIRECT:
@@ -97,55 +96,49 @@ class Proxy:
         return self.url == other.url
 
     def __hash__(self) -> int:
+        """Generate hash for the Proxy instance."""
         if self.type == ProxyType.DIRECT:
             return hash("direct_connection")
         return hash(self.url)
 
 
 class ProxyManager:
-    """
-    Manages proxy connections and testing.
+    """Manages proxy connections and testing.
 
-    Features:
-    - Parse multiple proxy URL formats (MTProto, SOCKS5)
-    - Connection testing with timeouts
-    - Automatic proxy selection
-    - Proxy failover support
+    Provides functionality to add, test, and select working proxies
+    for Telegram connections.
     """
 
     @classmethod
     def from_config(
         cls, config: "Config", exclude_direct: bool = False
     ) -> "ProxyManager":
-        """
-        Create ProxyManager instance from application config.
+        """Create ProxyManager instance from application config.
 
         Args:
             config: Application configuration object
+            exclude_direct: Whether to exclude direct connection from proxy list even if it is enabled in config
 
         Returns:
             ProxyManager instance
         """
         proxy_manager = cls()
         if config.telegram.connection.direct and not exclude_direct:
-            proxy_manager.add_direct_proxy()
+            proxy_manager._add_direct_proxy()
         for proxy in config.telegram.connection.proxies:
             proxy_manager.add_proxy(proxy)
         return proxy_manager
 
     def __init__(self):
+        """Initialize ProxyManager with empty proxy list."""
         self.proxies: List[Proxy] = []
+        """List of configured proxy connections"""
+
         self.current_proxy: Optional[Proxy] = None
-
-    proxies: List[Proxy]
-    """List of configured proxy connections"""
-
-    current_proxy: Optional[Proxy]
-    """Currently selected working proxy"""
+        """Currently selected working proxy"""
 
     def add_proxy(self, proxy_url: str) -> Optional[Proxy]:
-        """
-        Add new proxy from URL string.
+        """Add new proxy from URL string.
 
         Args:
             proxy_url: URL string in supported format
@@ -158,10 +151,8 @@ class ProxyManager:
             self.proxies.append(proxy)
         return proxy
 
-    def add_direct_proxy(self):
-        """
-        Add direct connection (no proxy) to the manager.
-        """
+    def _add_direct_proxy(self):
+        """Add direct connection (no proxy) to the manager."""
         direct_proxy = Proxy(
             url="",
             type=ProxyType.DIRECT,
@@ -172,8 +163,7 @@ class ProxyManager:
             self.proxies.append(direct_proxy)
 
     def _decode_secret(self, secret: str) -> str:
-        """
-        Decode MTProto proxy secret from base64.
+        """Decode MTProto proxy secret from base64.
 
         Args:
             secret: Base64 encoded secret string
@@ -188,8 +178,7 @@ class ProxyManager:
             return secret
 
     def _parse_proxy_url(self, proxy_url: str) -> Optional[Proxy]:
-        """
-        Parse proxy URL into proxy configuration.
+        """Parse proxy URL into proxy configuration.
 
         Supports formats:
         - mtproto://<secret>@<host>:<port>
@@ -249,7 +238,20 @@ class ProxyManager:
         timeout: float = 30.0,
         oneshot: bool = False,
     ) -> List["ProxyTestResult"]:
+        """Test configured proxies.
 
+        The best proxy will be set as `current_proxy`.
+
+        Args:
+            filter: Optional proxy type to filter for testing
+            exclusion: List of proxies to exclude from testing
+            shutdown_event: Optional asyncio event to signal shutdown
+            timeout: Timeout for proxy test in seconds
+            oneshot: If True, stop testing after first successful proxy
+
+        Returns:
+            List of ProxyTestResult objects with test outcomes
+        """
         candidates = [
             p
             for p in self.proxies
@@ -259,14 +261,15 @@ class ProxyManager:
         if not candidates:
             return []
 
-        results = await test_proxies(
+        results = await _test_proxies(
             candidates, timeout=timeout, shutdown_event=shutdown_event, oneshot=oneshot
         )
 
-        # Return first working proxy
+        # Set first working proxy as current
         for result in results:
             if result.success:
                 self.current_proxy = result.proxy
+                break
 
         return results
 
@@ -276,9 +279,9 @@ MT_PING_TAG = b"\xee\xee\xee\xee"
 
 @dataclass
 class ProxyTestResult:
-    """Result of a proxy test including latency and status."""
+    """Result of a proxy test, including latency and status."""
 
-    proxy: "Proxy"  # Forward reference
+    proxy: Proxy
     success: bool
     latency: Optional[float] = None
     error: Optional[str] = None
@@ -296,7 +299,7 @@ class ProxyTestResult:
         return self.success and (self.latency is not None and self.latency < 1000)
 
 
-async def ping_mtproto(
+async def _ping_mtproto(
     proxy: "Proxy", timeout: float = 30.0
 ) -> Tuple[bool, Optional[float], Optional[str]]:
     """Test MTProto proxy using actual Telegram connection."""
@@ -307,7 +310,7 @@ async def ping_mtproto(
     )
 
 
-async def ping_socks5(
+async def _ping_socks5(
     proxy: "Proxy", timeout: float = 5.0
 ) -> Tuple[bool, Optional[float], Optional[str]]:
     """Test SOCKS5 proxy with timeout and error reporting."""
@@ -356,7 +359,7 @@ async def ping_socks5(
         return False, None, str(e)
 
 
-async def ping_direct(
+async def _ping_direct(
     proxy: "Proxy", timeout: float = 30.0
 ) -> Tuple[bool, Optional[float], Optional[str]]:
     """Test direct connection to Telegram servers."""
@@ -435,11 +438,11 @@ async def _test_proxy_task(
 ) -> ProxyTestResult:
     """Test a proxy with timeout and shutdown support."""
     if proxy.type == ProxyType.MTPROTO:
-        test_func = ping_mtproto
+        test_func = _ping_mtproto
     elif proxy.type == ProxyType.SOCKS5:
-        test_func = ping_socks5
+        test_func = _ping_socks5
     elif proxy.type == ProxyType.DIRECT:
-        test_func = ping_direct
+        test_func = _ping_direct
     else:
         return ProxyTestResult(proxy, False, error="Unknown proxy type")
 
@@ -457,7 +460,7 @@ async def _test_proxy_task(
     return ProxyTestResult(proxy, success, latency, error)
 
 
-async def test_proxies(
+async def _test_proxies(
     proxies: List["Proxy"],
     timeout: float = 30.0,
     shutdown_event: Optional[asyncio.Event] = None,

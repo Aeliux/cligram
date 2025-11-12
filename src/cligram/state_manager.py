@@ -1,3 +1,5 @@
+"""State management module for presistent application data."""
+
 import asyncio
 import copy
 import hashlib
@@ -16,8 +18,7 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 
 class State(ABC):
-    """
-    Abstract base class for persistent state storage.
+    """Abstract base class for persistent state storage.
 
     Defines interface for loading, saving, and tracking changes
     to state data with support for validation and atomic operations.
@@ -25,8 +26,7 @@ class State(ABC):
 
     @abstractmethod
     def load(self, path: str) -> None:
-        """
-        Load state data from file.
+        """Load state data from file.
 
         Args:
             path: Path to state file
@@ -35,8 +35,7 @@ class State(ABC):
 
     @abstractmethod
     def save(self, path: str) -> None:
-        """
-        Save state data to file.
+        """Save state data to file.
 
         Args:
             path: Path to state file
@@ -53,9 +52,7 @@ StateT = TypeVar("StateT", bound=State)
 
 
 class JsonState(State):
-    """
-    JSON-based state persistence implementation.
-    """
+    """JSON-based state persistence implementation."""
 
     data: Dict[str, Any]
     """Current state data"""
@@ -64,6 +61,14 @@ class JsonState(State):
     """Optional schema for data validation"""
 
     def __init__(self):
+        """Initialize JSON state.
+
+        Initializes data with default values and sets up change tracking.
+        If a schema is defined, it will be used to validate data structure
+
+        If subclasses define _default_data or schema attributes, they will be used
+        instead of empty defaults.
+        """
         self._default_data: Dict[str, Any] = getattr(self, "_default_data", {})
         self.data: Dict[str, Any] = copy.deepcopy(self._default_data)
         self.schema: Optional[Dict[str, Any]] = getattr(self, "schema", None)
@@ -111,7 +116,14 @@ class JsonState(State):
         )
 
     def ensure_schema(self, data: Dict[str, Any]) -> None:
-        """Ensure current data matches schema."""
+        """Ensure current data matches schema.
+
+        Args:
+            data: Data to validate
+
+        Raises:
+            ValueError: If data does not match schema
+        """
         if self.schema:
             if not self.verify_structure(data, self.schema):
                 raise ValueError("State data does not match schema")
@@ -149,10 +161,15 @@ class JsonState(State):
     def verify_structure(
         cls, data: Any, schema: Dict[str, Any], path: str = ""
     ) -> bool:
-        """
-        Recursively verify that data matches the provided schema.
-        Returns True if valid, False otherwise.
-        Logs warnings for mismatches.
+        """Recursively verify that data matches the provided schema.
+
+        Args:
+            data: Data to verify
+            schema: Schema definition
+            path: Current data path for error messages
+
+        Returns:
+            True if data matches schema, False otherwise
         """
         if isinstance(schema, dict):
             if not isinstance(data, dict):
@@ -194,8 +211,7 @@ class JsonState(State):
 
     @staticmethod
     def _sets_to_lists(data: Any) -> Any:
-        """
-        Convert set objects to lists for JSON serialization.
+        """Convert set objects to lists for JSON serialization.
 
         Args:
             data: Data structure containing sets
@@ -213,16 +229,13 @@ class JsonState(State):
 
 
 class UsersState(JsonState):
-    """
-    User state tracking implementation.
+    """User state tracking implementation.
 
-    Maintains:
-    - Set of messaged user IDs
-    - Set of eligible usernames
-    - Automatic type conversion
+    Stores sets of messaged user IDs and eligible usernames to be messaged.
     """
 
     def __init__(self):
+        """Initialize user state."""
         self._default_data = {
             "messaged": set(),
             "eligible": set(),
@@ -254,13 +267,10 @@ class UsersState(JsonState):
 
 @dataclass
 class GroupInfo:
-    """
-    Represents a chat group's scanning window state.
+    """Represents a chat group's scanning window state.
 
     The scanning window defines the range of message IDs that have
     been processed, allowing for incremental scanning of large groups.
-
-    On any attribute update (except 'id'), the parent GroupsState's data is updated.
     """
 
     id: str
@@ -276,6 +286,7 @@ class GroupInfo:
     """Reference to parent GroupsState (not serialized)"""
 
     def __setattr__(self, name, value):
+        """Override setattr to sync changes with parent GroupsState."""
         if name in ["id", "_parent"]:
             if getattr(self, name, None) is not None:
                 raise AttributeError(
@@ -293,18 +304,14 @@ class GroupInfo:
 
 
 class GroupsState(JsonState):
-    """
-    Group scanning state implementation.
+    """Group scanning state implementation.
 
-    Tracks:
-    - Message ID windows per group
-    - Incremental scanning progress
-    - Group metadata
-
-    Keeps GroupInfo and internal data dict in sync on attribute changes.
+    Manages scanning windows for multiple groups, allowing tracking
+    of processed message ID ranges on a per-group basis.
     """
 
     def __init__(self):
+        """Initialize groups state."""
         super().__init__()
 
         self._groups: Dict[str, GroupInfo] = {}
@@ -316,7 +323,14 @@ class GroupsState(JsonState):
         self.data[group_id][attr] = value
 
     def get(self, group_id: str) -> GroupInfo:
-        """Get a group by ID, ensuring live sync with internal data."""
+        """Get a group by ID, ensuring live sync with internal data.
+
+        Args:
+            group_id: The unique identifier of the group
+
+        Returns:
+            GroupInfo instance for the specified group
+        """
         if group_id in self._groups:
             return self._groups[group_id]
 
@@ -330,38 +344,44 @@ class GroupsState(JsonState):
 
 
 class StateManager:
-    """
-    Manages persistent application state and handles file-based storage operations.
+    """Manages persistent application state and handles file-based storage operations.
 
-    Responsible for:
-    - Tracking messaged and eligible users
-    - Managing group scanning windows
-    - Saving/loading state from disk
-    - Creating backups of state files
+    Provides methods to register state types, load/save states,
+    and perform backups/restores of state data.
     """
 
     def __init__(self, data_dir: str | Path, backup_dir: Optional[str | Path] = None):
-        """
-        Initialize the state manager.
+        """Initialize the state manager.
 
         Args:
-            data_dir (str): Path to the data directory storing all state files
+            data_dir: Directory to store state files
+            backup_dir: Directory to store backups (optional)
         """
         self.data_dir = Path(data_dir).resolve()
+        """Directory for state files"""
+
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
         self.backup_dir = (
             Path(backup_dir).resolve() if backup_dir else self.data_dir / "backup"
         )
+        """Directory for backup files"""
+
         self._need_backup = False
+        """Flag indicating if state changes need backup"""
 
         self.lock = asyncio.Lock()
+        """Lock for synchronizing state operations"""
 
         self.states: Dict[str, State] = {}
+        """Registry of state handlers by name"""
 
         # Initialize core states
         self.users: UsersState = self.register("users", UsersState())
+        """State handler for user tracking"""
+
         self.groups: GroupsState = self.register("groups", GroupsState())
+        """State handler for group tracking"""
 
     def _get_state_path(self, name: str, dir: Optional[str | Path] = None) -> Path:
         """Get full path for state file."""
@@ -369,7 +389,15 @@ class StateManager:
         return source / f"{name}.json"
 
     def register(self, name: str, state: StateT) -> StateT:
-        """Register a new state type."""
+        """Register a new state type.
+
+        Args:
+            name: Name of the state
+            state: State instance to register
+
+        Returns:
+            The registered state instance
+        """
         if not isinstance(state, State):
             raise TypeError("State must be an instance of State")
 
@@ -435,7 +463,11 @@ class StateManager:
         self._need_backup = False
 
     async def restore(self, timestamp: Optional[str] = None):
-        """Restore all states from backup."""
+        """Restore all states from backup.
+
+        Args:
+            timestamp: Timestamp of the backup to restore (format: YYYYMMDD_HHMMSS
+        """
         if not self.backup_dir:
             raise ValueError("No backup directory configured")
         if self.backup_dir.is_file():
@@ -472,18 +504,3 @@ class StateManager:
             logger.info(f"Restored {restored} states from {backup_path.name}")
         else:
             logger.warning("No states restored")
-
-    states: Dict[str, State]
-    """Registry of state handlers by name"""
-
-    users: UsersState
-    """State handler for user tracking"""
-
-    groups: GroupsState
-    """State handler for group tracking"""
-
-    lock: asyncio.Lock
-    """Lock for synchronizing state operations"""
-
-    _need_backup: bool
-    """Flag indicating if state changes need backup"""

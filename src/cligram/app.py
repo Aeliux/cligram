@@ -1,3 +1,5 @@
+"""Main application module."""
+
 import asyncio
 import logging
 import platform
@@ -19,8 +21,7 @@ _recv_signals: int = 0
 
 
 def get_app() -> "Application":
-    """
-    Retrieve the global running application instance.
+    """Retrieve the global running application instance.
 
     Returns:
         Application: The global application instance
@@ -35,7 +36,13 @@ def get_app() -> "Application":
 
 
 class Application:
+    """Main application class for cligram.
+
+    Manages configuration, state, signal handling, and application lifecycle.
+    """
+
     def __init__(self, config: "Config"):
+        """Initialize the application with the given configuration."""
         self.config = config
         """Application configuration."""
 
@@ -54,9 +61,8 @@ class Application:
         self.status: Status = Status("", console=self.console, spinner="dots")
         """Rich status indicator for CLI feedback."""
 
-    async def shutdown(self, sig=None):
-        """
-        Handle graceful application shutdown.
+    async def _shutdown(self, sig=None):
+        """Handle graceful application shutdown.
 
         Args:
             sig: Signal that triggered shutdown (SIGTERM/SIGINT)
@@ -75,9 +81,8 @@ class Application:
         if not self.shutdown_event.is_set():
             self.shutdown_event.set()
 
-    async def setup_signal_handlers(self):
-        """
-        Configure OS signal handlers.
+    async def _setup_signal_handlers(self):
+        """Configure OS signal handlers.
 
         Handles:
         - SIGTERM for graceful termination
@@ -88,10 +93,10 @@ class Application:
         if platform.system() == "Windows":
             try:
                 signal.signal(
-                    signal.SIGINT, lambda s, f: asyncio.create_task(self.shutdown(s))
+                    signal.SIGINT, lambda s, f: asyncio.create_task(self._shutdown(s))
                 )
                 signal.signal(
-                    signal.SIGTERM, lambda s, f: asyncio.create_task(self.shutdown(s))
+                    signal.SIGTERM, lambda s, f: asyncio.create_task(self._shutdown(s))
                 )
             except (AttributeError, NotImplementedError):
                 logger.warning("Signal handlers not fully supported on Windows")
@@ -99,14 +104,13 @@ class Application:
             for sig in (signal.SIGTERM, signal.SIGINT):
                 try:
                     asyncio.get_event_loop().add_signal_handler(
-                        sig, lambda s=sig: asyncio.create_task(self.shutdown(s))  # type: ignore
+                        sig, lambda s=sig: asyncio.create_task(self._shutdown(s))  # type: ignore
                     )
                 except NotImplementedError:
                     logger.warning(f"Failed to set handler for signal {sig}")
 
     def check_shutdown(self):
-        """
-        Check if shutdown has been requested.
+        """Check if shutdown has been requested.
 
         Raises:
             asyncio.CancelledError: If shutdown event is set
@@ -115,8 +119,7 @@ class Application:
             raise asyncio.CancelledError()
 
     async def sleep(self):
-        """
-        Sleep for a configured delay while checking for shutdown.
+        """Sleep for a configured delay while checking for shutdown.
 
         Note: this method is not precise and it is an intended behavior
 
@@ -141,10 +144,8 @@ class Application:
             finally:
                 self.status.update(cur_status)
 
-    async def run(self, task: Callable[["Application"], Coroutine]):
-        """
-        Executed by start() to run the main application task.
-        """
+    async def _run(self, task: Callable[["Application"], Coroutine]):
+        """Executed by start() to run the main application task."""
         from . import __version__
 
         if not asyncio.iscoroutinefunction(task):
@@ -172,7 +173,7 @@ class Application:
 
         self.status.update("Initializing...")
         # Setup platform-specific signal handlers
-        await self.setup_signal_handlers()
+        await self._setup_signal_handlers()
 
         logger.debug(f"Loaded configuration: {self.config.path}")
 
@@ -196,8 +197,7 @@ class Application:
             app_instance = None
 
     def start(self, task: Callable[["Application"], Coroutine]):
-        """
-        Initialize application and run the main task in the event loop.
+        """Initialize application and run the main task in the event loop.
 
         Initializes signal handlers, loads state, and executes the provided task.
         After task completion, saves state and performs cleanup.
@@ -211,7 +211,7 @@ class Application:
             TypeError: If the provided task is not an async function
         """
         try:
-            asyncio.run(self.run(task))
+            asyncio.run(self._run(task))
         except (asyncio.CancelledError, KeyboardInterrupt):
             logger.warning("Cancellation requested by user")
             self.console.print(

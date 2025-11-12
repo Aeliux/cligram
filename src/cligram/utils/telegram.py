@@ -31,9 +31,7 @@ def get_client(
     proxy: Optional["Proxy"],
     session: Optional["CustomSession"],
 ) -> TelegramClient:
-    """
-    Create a Telethon TelegramClient from the given configuration.
-    """
+    """Create a Telethon TelegramClient from the given configuration."""
     from .. import __version__
 
     logger.info("Creating Telegram client")
@@ -66,7 +64,7 @@ def get_client(
     }
 
     if proxy and not proxy.is_direct:
-        params.update(proxy.export())
+        params.update(proxy._export())
 
     return TelegramClient(**params)
 
@@ -74,9 +72,7 @@ def get_client(
 def get_session(
     config: "Config", create: bool = False, device: Optional["DeviceInfo"] = None
 ) -> "CustomSession":
-    """
-    Load a CustomSession based on the configuration.
-    """
+    """Load a CustomSession based on the configuration."""
     from ..session import CustomSession
 
     session = CustomSession(session_id=config.telegram.session, create=create)

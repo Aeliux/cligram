@@ -1,16 +1,20 @@
+""" "Custom Telethon session."""
+
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple, TypeVar, Union, overload
 
 from telethon.sessions import SQLiteSession
 
 from . import Config, exceptions, utils
 
+_TDefault = TypeVar("_TDefault")
+
 
 def get_search_paths(config: Optional[Config] = None) -> List[Path]:
     """Get a list of all session search paths."""
     if config is None:
-        config = Config.get_config()
+        config = Config.get_config(raise_if_failed=True)
 
     return [
         Path.cwd(),
@@ -22,16 +26,14 @@ def get_search_paths(config: Optional[Config] = None) -> List[Path]:
 
 
 class CustomSession(SQLiteSession):
-    """
-    Custom Telethon SQLite session with metadata storage and multi-directory search.
-    """
+    """Custom Telethon SQLite session with metadata storage and multi-directory search."""
 
     def __init__(self, session_id: Optional[str] = None, create: bool = False):
-        """
-        Initialize custom session.
+        """Initialize custom session.
 
         Args:
             session_id: Session identifier/name or full path
+            create: Whether to create the session file if not found
         """
         if session_id is None:
             super().__init__(None)
@@ -75,7 +77,7 @@ class CustomSession(SQLiteSession):
             super().__init__(str(found_path))
         self._initialize_metadata_table()
 
-        config = Config.get_config()
+        config = Config.get_config(raise_if_failed=True)
         api_id = config.telegram.api.identifier
         session_api_id = self.get_metadata("api_id")
         if session_api_id is None:
@@ -106,7 +108,13 @@ class CustomSession(SQLiteSession):
         )
         c.close()
 
-    def get_metadata(self, key: str, default: Any = None) -> Optional[str]:
+    @overload
+    def get_metadata(self, key: str) -> Optional[str]: ...
+
+    @overload
+    def get_metadata(self, key: str, default: _TDefault) -> Union[str, _TDefault]: ...
+
+    def get_metadata(self, key: str, default: Optional[Any] = None) -> Optional[Any]:
         """Retrieve custom metadata."""
         c = self._cursor()
         c.execute("SELECT value FROM metadata WHERE key = ?", (key,))

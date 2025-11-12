@@ -1,3 +1,5 @@
+"""Module to determine the version of the cligram package."""
+
 from importlib.metadata import PackageNotFoundError, version
 
 from . import exceptions

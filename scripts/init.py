@@ -1,7 +1,6 @@
 #! /usr/bin/env python3
 
-"""
-init.py
+"""init.py
 This script initializes the development environment by installing necessary dependencies.
 It ensures Poetry is installed, installs project dependencies, and sets up pre-commit hooks.
 """

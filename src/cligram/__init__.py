@@ -1,3 +1,5 @@
+"""CLI based telegram client."""
+
 from ._paths import DEFAULT_LOGS_PATH, DEFAULT_PATH, GLOBAL_CONFIG_PATH  # isort:skip
 from .__version__ import __version__  # isort:skip
 

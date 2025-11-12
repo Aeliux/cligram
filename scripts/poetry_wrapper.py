@@ -1,7 +1,6 @@
 #! /usr/bin/env python3
 
-"""
-poetry_wrapper.py
+"""poetry_wrapper.py
 A reusable wrapper that ensures Poetry is available and forwards commands to it.
 This can be used by other scripts to run commands in the Poetry environment.
 """
@@ -16,8 +15,7 @@ from init import ensure_poetry, get_poetry_executable
 
 
 def run_in_poetry_env(command_args, check=True):
-    """
-    Run a command in the Poetry virtual environment.
+    """Run a command in the Poetry virtual environment.
 
     Args:
         command_args: List of command arguments (e.g., ["pytest", "-v"])
@@ -45,8 +43,7 @@ def run_in_poetry_env(command_args, check=True):
 
 
 def main():
-    """
-    Main function that forwards all arguments to Poetry run.
+    """Main function that forwards all arguments to Poetry run.
     Usage: python poetry_wrapper.py <command> [args...]
     Example: python poetry_wrapper.py pytest -v
     """

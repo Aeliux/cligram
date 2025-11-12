@@ -136,8 +136,7 @@ class ArchiveEntry:
 
 
 class AsyncArchive:
-    """
-    High-performance async archive with encryption and streaming support.
+    """High-performance async archive with encryption and streaming support.
 
     The archive data is held in memory by default for fast operations.
     Decryption happens only on load, encryption only on export.
@@ -192,8 +191,7 @@ class AsyncArchive:
         password: Optional[str] = None,
         compression: Union[str, CompressionType] = CompressionType.GZIP,
     ) -> "AsyncArchive":
-        """
-        Load archive from file.
+        """Load archive from file.
 
         Args:
             path: Path to archive file
@@ -214,8 +212,7 @@ class AsyncArchive:
         password: Optional[str] = None,
         compression: Union[str, CompressionType] = CompressionType.GZIP,
     ) -> "AsyncArchive":
-        """
-        Create archive from bytes.
+        """Create archive from bytes.
 
         Args:
             data: Archive bytes (encrypted if password provided)
@@ -236,8 +233,7 @@ class AsyncArchive:
         password: Optional[str] = None,
         compression: Union[str, CompressionType] = CompressionType.GZIP,
     ) -> "AsyncArchive":
-        """
-        Create archive from base64 string.
+        """Create archive from base64 string.
 
         Args:
             b64_string: Base64 encoded archive
@@ -262,8 +258,7 @@ class AsyncArchive:
         password: Optional[str] = None,
         compression: Union[str, CompressionType] = CompressionType.GZIP,
     ) -> "AsyncArchive":
-        """
-        Create archive from directory.
+        """Create archive from directory.
 
         Args:
             directory: Directory to archive
@@ -367,8 +362,7 @@ class AsyncArchive:
         return buffer.getvalue()
 
     async def read(self, path: Union[str, Path]) -> None:
-        """
-        Read archive from file.
+        """Read archive from file.
 
         Args:
             path: Path to archive file
@@ -383,8 +377,7 @@ class AsyncArchive:
         await self._load_from_bytes(data)
 
     async def write(self, path: Union[str, Path]) -> None:
-        """
-        Write archive to file.
+        """Write archive to file.
 
         Args:
             path: Output path
@@ -401,8 +394,7 @@ class AsyncArchive:
             await f.write(data)
 
     async def to_bytes(self) -> bytes:
-        """
-        Get archive as bytes.
+        """Get archive as bytes.
 
         Returns:
             Archive bytes
@@ -421,8 +413,7 @@ class AsyncArchive:
         return data
 
     async def to_base64(self) -> str:
-        """
-        Get archive as base64 string.
+        """Get archive as base64 string.
 
         Returns:
             Base64 encoded archive
@@ -435,8 +426,7 @@ class AsyncArchive:
     async def add_file(
         self, file_path: Union[str, Path], arcname: Optional[str] = None
     ) -> ArchiveEntry:
-        """
-        Add file to archive.
+        """Add file to archive.
 
         Args:
             file_path: Path to file
@@ -465,8 +455,7 @@ class AsyncArchive:
     async def add_directory(
         self, dir_path: Union[str, Path], arcname: Optional[str] = None
     ) -> List[ArchiveEntry]:
-        """
-        Add directory to archive.
+        """Add directory to archive.
 
         Args:
             dir_path: Path to directory
@@ -507,8 +496,7 @@ class AsyncArchive:
     async def add_bytes(
         self, name: str, data: bytes, mode: int = 0o644
     ) -> ArchiveEntry:
-        """
-        Add file from bytes to archive.
+        """Add file from bytes to archive.
 
         Args:
             name: Name in archive
@@ -533,8 +521,7 @@ class AsyncArchive:
         return entry
 
     def get_entry(self, name: str) -> ArchiveEntry:
-        """
-        Get archive entry by name.
+        """Get archive entry by name.
 
         Args:
             name: Entry name
@@ -547,8 +534,7 @@ class AsyncArchive:
         return self._entries[name]
 
     async def get_file(self, name: str) -> bytes:
-        """
-        Get content of a file from archive.
+        """Get content of a file from archive.
 
         Args:
             name: Path of file within archive
@@ -571,8 +557,7 @@ class AsyncArchive:
         return name in self._entries
 
     def remove_file(self, name: str) -> ArchiveEntry:
-        """
-        Remove file from archive.
+        """Remove file from archive.
 
         Args:
             name: Entry name
@@ -585,8 +570,7 @@ class AsyncArchive:
         return self._entries.pop(name)
 
     def list_files(self) -> List[ArchiveEntry]:
-        """
-        List all entries in archive.
+        """List all entries in archive.
 
         Returns:
             List of ArchiveEntry objects
@@ -594,8 +578,7 @@ class AsyncArchive:
         return list(self._entries.values())
 
     def list_file_names(self) -> List[str]:
-        """
-        List all entry names in archive.
+        """List all entry names in archive.
 
         Returns:
             List of entry names
@@ -603,8 +586,7 @@ class AsyncArchive:
         return list(self._entries.keys())
 
     async def extract(self, output_dir: Union[str, Path] = ".") -> Path:
-        """
-        Extract archive to directory.
+        """Extract archive to directory.
 
         Args:
             output_dir: Directory to extract to
@@ -638,8 +620,7 @@ class AsyncArchive:
         return output_dir
 
     async def stream_files(self) -> AsyncIterator[ArchiveEntry]:
-        """
-        Stream entries from archive.
+        """Stream entries from archive.
 
         Yields:
             ArchiveEntry objects
