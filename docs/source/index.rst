@@ -8,6 +8,7 @@ Welcome to cligram's documentation!
    :caption: Contents:
 
    installation
+   cli
    references/cligram
 
 Indices and tables
