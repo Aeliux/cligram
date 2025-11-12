@@ -2,6 +2,9 @@
 
 A powerful CLI-based Telegram client for automated message forwarding and group scanning, built with Python and Telethon.
 
+[![CI/CD](https://github.com/Aeliux/cligram/actions/workflows/main.yml/badge.svg?event=push)](https://github.com/Aeliux/cligram/actions/workflows/main.yml)
+[![codecov](https://codecov.io/gh/Aeliux/cligram/graph/badge.svg?token=zXk4jN5qTD)](https://codecov.io/gh/Aeliux/cligram)
+[![PyPI Downloads](https://static.pepy.tech/personalized-badge/cligram?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/cligram)
 [![Python Version](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
