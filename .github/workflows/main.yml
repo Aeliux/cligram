@@ -51,8 +51,8 @@ jobs:
         id: checks
         run: |
           source .venv/bin/activate
-          scripts/check.py || exit $?
           scripts/cov.py --xml --junit || exit $?
+          scripts/check.py || exit $?
 
       - name: Upload coverage
         if: ${{ always() }}
