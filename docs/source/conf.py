@@ -1,17 +1,24 @@
 """Sphinx configuration for cligram documentation."""
 
 import os
-import subprocess
 import sys
 
 # Add project root to path
-sys.path.insert(0, os.path.abspath("../../src"))
+_src_root = os.path.abspath("../../src")
+sys.path.insert(0, _src_root)
 
 # Project information
 project = "cligram"
 copyright = "2025, Alireza Poodineh"
 author = "Alireza Poodineh"
-release = "0.3.3"
+
+# Execute version retrieval
+try:
+    from cligram.__version__ import __version__
+
+    release = __version__
+except Exception:
+    release = "0.0.0"
 
 # General configuration
 extensions = [
