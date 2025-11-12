@@ -22,6 +22,10 @@ Cligram is designed for small-scale university survey advertising and message di
 - **Incremental Scanning**: Resume scanning from where you left off with message window tracking
 - **Safe Automation**: Test mode, rapid state saving, and graceful shutdown handling
 
+## Documentation
+
+The full documentation is available at [https://cligram.readthedocs.io](https://cligram.readthedocs.io)
+
 ## Installation
 
 ### Requirements

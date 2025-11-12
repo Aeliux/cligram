@@ -36,6 +36,7 @@ cligram = "cligram.cli:main"
 Homepage = "https://github.com/Aeliux/cligram"
 Repository = "https://github.com/Aeliux/cligram"
 Issues = "https://github.com/Aeliux/cligram/issues"
+documentation = "https://cligram.readthedocs.io"
 
 [project.optional-dependencies]
 # Performance optimization extras
