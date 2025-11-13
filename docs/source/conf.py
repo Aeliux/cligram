@@ -13,12 +13,13 @@ copyright = "2025, Alireza Poodineh"
 author = "Alireza Poodineh"
 
 # Execute version retrieval
-try:
-    from cligram.__version__ import __version__
-
-    release = __version__
-except Exception:
-    release = "0.0.0"
+with open(os.path.join(_src_root, "cligram", "_gen_version.py")) as f:
+    # extract version without importing or executing the file
+    content = f.read()
+    version_line = next(
+        line for line in content.splitlines() if line.startswith("__version__")
+    )
+    release = version = version_line.split("=")[1].strip().strip('"').strip("'")
 
 # General configuration
 extensions = [

@@ -1,7 +1,7 @@
 """CLI based telegram client."""
 
 from ._paths import DEFAULT_LOGS_PATH, DEFAULT_PATH, GLOBAL_CONFIG_PATH  # isort:skip
-from .__version__ import __version__  # isort:skip
+from .version import __version__, __version_tuple__  # isort:skip
 
 from . import exceptions, utils  # isort:skip
 from .state_manager import StateManager  # isort:skip
@@ -15,6 +15,7 @@ __all__ = [
     "GLOBAL_CONFIG_PATH",
     "DEFAULT_LOGS_PATH",
     "__version__",
+    "__version_tuple__",
     "Application",
     "Config",
     "ScanMode",
