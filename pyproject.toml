@@ -88,6 +88,16 @@ style = "pep440"
 strict = true
 ignore-untracked = true
 
+[tool.poetry-dynamic-versioning.substitution]
+files = ["*.py", "*/__init__.py", "*/__version__.py", "*/_version.py"]
+patterns = [
+    '''(^__version__\s*(?::.*?)?=\s*['"])[^'"]*(['"])''',
+    { value = '''(^__version_tuple__\s*(?::.*?)?=\s*\()[^)]*(\))''', mode = "tuple" },
+]
+folders = [
+  { path = "src/cligram" }
+]
+
 [tool.poetry-dynamic-versioning.files."src/cligram/_gen_version.py"]
 persistent-substitution = true
 initial-content = """
