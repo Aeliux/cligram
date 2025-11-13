@@ -8,6 +8,7 @@ build:
     post_checkout:
       - git fetch --unshallow || true
     post_install:
+      - poetry self install --no-interaction
       - poetry dynamic-versioning
 
 sphinx:
