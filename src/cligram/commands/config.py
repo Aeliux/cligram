@@ -92,5 +92,5 @@ def set_config(
     parsed_value = config._parse_value(value)
     config.set_nested_value(key, parsed_value)
     config.save()
-    nvalue = config.get_nested_value(key)
+    nvalue = config.get_nested_value(key, bypass_interceptor=True)
     typer.echo(f"{key}={nvalue}")

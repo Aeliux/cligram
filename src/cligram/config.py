@@ -102,6 +102,14 @@ class ApiConfig:
             return "***REDACTED***"
         return getattr(self, attr)
 
+    def _intercept_set(self, attr: str, value: Any) -> None:
+        if attr in ("id", "hash") and self.from_env:
+            raise RuntimeError(
+                "Cannot modify API credentials loaded from environment variables"
+            )
+
+        setattr(self, attr, value)
+
     @classmethod
     def _from_dict(cls, data: Dict[str, Any]) -> "ApiConfig":
         return cls(
@@ -642,12 +650,13 @@ class Config:
 
         return value_str
 
-    def set_nested_value(self, path: str, value: Any):
+    def set_nested_value(self, path: str, value: Any, bypass_interceptor: bool = False):
         """Set a nested configuration value using dot notation.
 
         Args:
             path: Dot-separated path to value (e.g., "app.verbose")
             value: Value to set
+            bypass_interceptor: Whether to bypass attribute interceptor
 
         Raises:
             ValueError: If path is invalid
@@ -660,12 +669,9 @@ class Config:
             raise ValueError(f"Cannot set top-level configuration directly: {path}")
 
         # Navigate to parent object
-        obj = self
-        for part in parts[:-1]:
-            if not hasattr(obj, part):
-                logger.error(f"Invalid path: {path}. '{part}' not found.")
-                raise ValueError(f"Invalid path: {path}. '{part}' not found.")
-            obj = getattr(obj, part)
+        obj = self.get_nested_value(
+            ".".join(parts[:-1]), bypass_interceptor=bypass_interceptor
+        )
 
         # Set the final value
         attr = parts[-1]
@@ -687,7 +693,11 @@ class Config:
                 elif field_info.type == InteractiveMode:
                     value = InteractiveMode(value)
 
-        setattr(obj, attr, value)
+        interceptor = getattr(obj, "_intercept_set", None)
+        if bypass_interceptor or interceptor is None:
+            setattr(obj, attr, value)
+        else:
+            interceptor(attr, value)
 
     def get_nested_value(self, path: str, bypass_interceptor: bool = False) -> Any:
         """Get a nested configuration value using dot notation.
