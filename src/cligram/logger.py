@@ -69,9 +69,11 @@ def setup_preinit_logger():
     it creates a log file in the default logs path
     with the preinit prefix and current date.
     """
+    log_path = Path(DEFAULT_LOGS_PATH / f"preinit-{_get_date()}.log")
+    log_path.parent.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(
         level=logging.DEBUG,
-        filename=DEFAULT_LOGS_PATH / f"preinit-{_get_date()}.log",
+        filename=log_path,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
