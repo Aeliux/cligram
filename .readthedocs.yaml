@@ -8,8 +8,7 @@ build:
     post_checkout:
       - git fetch --unshallow || true
     post_install:
-      - poetry install --no-interaction
-      - poetry dynamic-versioning
+      - poetry-dynamic-versioning
 
 sphinx:
   configuration: docs/source/conf.py
