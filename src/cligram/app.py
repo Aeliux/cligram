@@ -182,7 +182,7 @@ class Application:
             logger.warning("Configuration updated with new fields")
 
         self.status.update("Loading state...")
-        self.state.load()
+        await self.state.load()
 
         try:
             self.status.update("Running task...")
@@ -191,7 +191,7 @@ class Application:
         finally:
             self.status.update("Shutting down...")
             await self.state.save()
-            await self.state.backup()
+            self.state.backup()
             logger.info("Application shutdown completed")
             self.status.stop()
             app_instance = None

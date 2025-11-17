@@ -3,48 +3,89 @@
 import asyncio
 import copy
 import hashlib
-import json
 import logging
 import os
 import shutil
 from abc import ABC, abstractmethod
 from argparse import ArgumentError
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, Set, TypeVar
+from typing import TYPE_CHECKING, Any, Dict, Optional, TypeVar, Union, overload
+
+import aiofiles
+
+if TYPE_CHECKING:
+    import ujson as json
+else:
+    try:
+        import ujson as json
+    except ImportError:
+        import json
 
 logger: logging.Logger = logging.getLogger(__name__)
 
 
 class State(ABC):
-    """Abstract base class for persistent state storage.
+    """Abstract base class for state storage.
 
-    Defines interface for loading, saving, and tracking changes
-    to state data with support for validation and atomic operations.
+    Defines interface for loading, exporting, and tracking changes to state data.
     """
 
-    @abstractmethod
-    def load(self, path: str) -> None:
-        """Load state data from file.
+    suffix: str = ".state"
+    """File suffix for state files"""
+
+    @staticmethod
+    def parse(content: str) -> Any:
+        """Parse state input contents.
+
+        Subclasses may override this method to implement custom parsing logic.
+
+        The default implementation returns the content as-is.
 
         Args:
-            path: Path to state file
+            content: Content of the state file
+
+        Returns:
+            Parsed state data, could be passed to load() method
+        """
+        return content
+
+    @abstractmethod
+    def load(self, data: Any) -> None:
+        """Load state data.
+
+        Args:
+            data: Data to load into state
         """
         pass
 
     @abstractmethod
-    def save(self, path: str) -> None:
-        """Save state data to file.
+    def export(self) -> Any:
+        """Export current state data.
 
-        Args:
-            path: Path to state file
+        Returns:
+            Current state data
         """
         pass
 
     @abstractmethod
     def changed(self) -> bool:
-        """Check if state changed since last save."""
+        """Check if state changed since last reset.
+
+        Returns:
+            True if state has changed, False otherwise
+        """
+        pass
+
+    @abstractmethod
+    def set_changed(self, changed: bool) -> None:
+        """Set the changed status of the state.
+
+        This method is used internally to mark the state as changed or unchanged.
+
+        Args:
+            changed: True to mark state as changed, False to mark as unchanged
+        """
         pass
 
 
@@ -52,13 +93,16 @@ StateT = TypeVar("StateT", bound=State)
 
 
 class JsonState(State):
-    """JSON-based state persistence implementation."""
+    """JSON-based state implementation."""
 
     data: Dict[str, Any]
     """Current state data"""
 
     schema: Optional[Dict[str, Any]]
     """Optional schema for data validation"""
+
+    suffix: str = ".json"
+    """File suffix for JSON state files"""
 
     def __init__(self):
         """Initialize JSON state.
@@ -72,24 +116,49 @@ class JsonState(State):
         self._default_data: Dict[str, Any] = getattr(self, "_default_data", {})
         self.data: Dict[str, Any] = copy.deepcopy(self._default_data)
         self.schema: Optional[Dict[str, Any]] = getattr(self, "schema", None)
-        self._new_state: bool = False
-        self._last_hash = self.get_hash()
+        self.set_changed(False)
 
-    def load(self, path: str) -> None:
-        """Load state data from JSON file."""
+    @staticmethod
+    def parse(content: str) -> Dict[str, Any] | list:
+        """Parse JSON state contents.
+
+        Args:
+            content: Content of the state file
+
+        Returns:
+            Parsed state data
+
+        Raises:
+            ValueError: If file content is invalid
+        """
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON content: {e}") from e
+
+        if not isinstance(data, (dict, list)):
+            raise ValueError("Invalid JSON content: expected dict or list at top level")
+
+        return data
+
+    def load(self, data: Optional[Union[Dict[str, Any], str]]) -> None:
+        """Load state data from JSON string or dictionary.
+
+        Args:
+            data: Data to load into state, either as a dict or JSON string
+
+        Raises:
+            RuntimeError: If there are unsaved changes
+        """
         if self.changed():
             raise RuntimeError("Cannot load state with unsaved changes")
 
-        data = self._read_json(path)
-
         if data is None:
-            self._new_state = True
-            logger.warning(f"No data found at {path}")
             return
 
         if not isinstance(data, dict):
             raise ValueError(
-                f"Invalid data format in {path}: expected dict, got {type(data).__name__}"
+                f"Invalid data format: expected dict, got {type(data).__name__}"
             )
 
         # merge with default data
@@ -97,23 +166,39 @@ class JsonState(State):
 
         self.ensure_schema(data)
         self.data = data
-        self._last_hash = self.get_hash()
+        self.set_changed(False)
 
-    def save(self, path: str) -> None:
-        """Save state data to JSON file."""
-        if self.changed():
-            self.ensure_schema(self.data)
-            self._atomic_save(path)
-            self._new_state = False
-            self._last_hash = self.get_hash()
+    def export(self) -> str:
+        """Export current state data.
+
+        Returns:
+            Current state data
+        """
+        self.ensure_schema(self.data)
+        normalized = JsonState._sets_to_lists(self.data)
+        json_data = json.dumps(normalized, sort_keys=True)
+        return json_data
 
     def changed(self) -> bool:
-        """Check if state data has changed since last save."""
-        return (
-            self._new_state
-            or self._last_hash is None
-            or self.get_hash() != self._last_hash
-        )
+        """Check if state changed since last reset.
+
+        Returns:
+            True if state has changed, False otherwise
+        """
+        return self.get_hash() != self._last_hash
+
+    def set_changed(self, changed: bool) -> None:
+        """Set the changed status of the state.
+
+        This method is used internally to mark the state as changed or unchanged.
+
+        Args:
+            changed: True to mark state as changed, False to mark as unchanged
+        """
+        if not changed:
+            self._last_hash = self.get_hash()
+        else:
+            self._last_hash = ""
 
     def ensure_schema(self, data: Dict[str, Any]) -> None:
         """Ensure current data matches schema.
@@ -134,28 +219,6 @@ class JsonState(State):
         json_data = JsonState._sets_to_lists(self.data)
         m.update(json.dumps(json_data, sort_keys=True).encode("utf-8"))
         return m.hexdigest()
-
-    def _read_json(self, path: str) -> Optional[Dict[str, Any]]:
-        """Read JSON data from file."""
-        try:
-            with open(path, "r") as f:
-                return json.load(f)
-        except FileNotFoundError:
-            return None
-
-    def _atomic_save(self, path: str) -> None:
-        """Save state data to JSON file atomically."""
-        tmp = f"{path}.tmp"
-        try:
-            # Convert sets to lists before saving
-            json_data = JsonState._sets_to_lists(self.data)
-            with open(tmp, "w") as f:
-                json.dump(json_data, f, indent=2)
-            os.replace(tmp, path)
-        except Exception:  # pragma: no cover
-            if os.path.exists(tmp):
-                os.unlink(tmp)
-            raise
 
     @classmethod
     def verify_structure(
@@ -228,127 +291,15 @@ class JsonState(State):
         return data
 
 
-class UsersState(JsonState):
-    """User state tracking implementation.
-
-    Stores sets of messaged user IDs and eligible usernames to be messaged.
-    """
-
-    def __init__(self):
-        """Initialize user state."""
-        self._default_data = {
-            "messaged": set(),
-            "eligible": set(),
-        }
-
-        super().__init__()
-
-    def load(self, path) -> None:
-        """Load user state data from JSON file."""
-        super().load(path)
-
-        if not isinstance(self.data["messaged"], set):
-            self.data["messaged"] = set(self.data["messaged"])
-        if not isinstance(self.data["eligible"], set):
-            self.data["eligible"] = set(self.data["eligible"])
-
-        self._last_hash = self.get_hash()
-
-    @property
-    def messaged(self) -> Set[int]:
-        """Get the set of users that have been messaged."""
-        return self.data["messaged"]
-
-    @property
-    def eligible(self) -> Set[str]:
-        """Get the set of eligible usernames."""
-        return self.data["eligible"]
-
-
-@dataclass
-class GroupInfo:
-    """Represents a chat group's scanning window state.
-
-    The scanning window defines the range of message IDs that have
-    been processed, allowing for incremental scanning of large groups.
-    """
-
-    id: str
-    """Group's unique identifier"""
-
-    max: Optional[int] = None
-    """Highest message ID scanned"""
-
-    min: Optional[int] = None
-    """Lowest message ID scanned"""
-
-    _parent: Optional["GroupsState"] = None
-    """Reference to parent GroupsState (not serialized)"""
-
-    def __setattr__(self, name, value):
-        """Override setattr to sync changes with parent GroupsState."""
-        if name in ["id", "_parent"]:
-            if getattr(self, name, None) is not None:
-                raise AttributeError(
-                    f"Cannot change '{name}' attribute after initialization"
-                )
-
-        super().__setattr__(name, value)
-        # Update parent GroupsState's data dict on any change except 'id' and '_parent'
-        if (
-            name not in ("id", "_parent")
-            and hasattr(self, "_parent")
-            and self._parent is not None
-        ):
-            self._parent._update_group_data(self.id, name, value)
-
-
-class GroupsState(JsonState):
-    """Group scanning state implementation.
-
-    Manages scanning windows for multiple groups, allowing tracking
-    of processed message ID ranges on a per-group basis.
-    """
-
-    def __init__(self):
-        """Initialize groups state."""
-        super().__init__()
-
-        self._groups: Dict[str, GroupInfo] = {}
-
-    def _update_group_data(self, group_id: str, attr: str, value: Any):
-        """Update the internal data dict for a group."""
-        if group_id not in self.data:
-            self.data[group_id] = {}
-        self.data[group_id][attr] = value
-
-    def get(self, group_id: str) -> GroupInfo:
-        """Get a group by ID, ensuring live sync with internal data.
-
-        Args:
-            group_id: The unique identifier of the group
-
-        Returns:
-            GroupInfo instance for the specified group
-        """
-        if group_id in self._groups:
-            return self._groups[group_id]
-
-        data = {}
-        if group_id in self.data:
-            data = self.data[group_id]
-
-        group = GroupInfo(id=group_id, _parent=self, **data)
-        self._groups[group_id] = group
-        return group
-
-
 class StateManager:
     """Manages persistent application state and handles file-based storage operations.
 
     Provides methods to register state types, load/save states,
     and perform backups/restores of state data.
     """
+
+    _registered_states: Dict[str, type[State]] = {}
+    """Class-level registry of state types"""
 
     def __init__(self, data_dir: str | Path, backup_dir: Optional[str | Path] = None):
         """Initialize the state manager.
@@ -376,42 +327,79 @@ class StateManager:
         self.states: Dict[str, State] = {}
         """Registry of state handlers by name"""
 
-        # Initialize core states
-        self.users: UsersState = self.register("users", UsersState())
-        """State handler for user tracking"""
+        # Initialize all registered states
+        for name, state_class in self._registered_states.items():
+            self.states[name] = state_class()
 
-        self.groups: GroupsState = self.register("groups", GroupsState())
-        """State handler for group tracking"""
-
-    def _get_state_path(self, name: str, dir: Optional[str | Path] = None) -> Path:
+    def _get_state_path(self, name: str) -> Path:
         """Get full path for state file."""
-        source = Path(dir).resolve() if dir else self.data_dir
-        return source / f"{name}.json"
+        suffix = self.states[name].suffix
+        return self.data_dir / f"{name}{suffix}"
 
-    def register(self, name: str, state: StateT) -> StateT:
+    @classmethod
+    def register(cls, name: str, state_class: type[State]) -> None:
         """Register a new state type.
+
+        This method does not affect existing StateManager instances.
 
         Args:
             name: Name of the state
-            state: State instance to register
+            state_class: State class to register
+
+        Raises:
+            TypeError: If state_class is not a State subclass
+            ArgumentError: If name is already registered
+        """
+        if not isinstance(state_class, type) or not issubclass(state_class, State):
+            raise TypeError("State must be a subclass of State")
+
+        if name in cls._registered_states:
+            raise ArgumentError(None, f"State '{name}' is already registered")
+
+        cls._registered_states[name] = state_class
+
+    @overload
+    def get(self, name: str) -> State: ...
+
+    @overload
+    def get(self, name: str, expected_type: type[StateT]) -> StateT: ...
+
+    def get(self, name: str, expected_type: Optional[type[State]] = None) -> State:
+        """Get registered state by name.
+
+        Args:
+            name: Name of the state
+            expected_type: Optional expected type of the state
 
         Returns:
-            The registered state instance
-        """
-        if not isinstance(state, State):
-            raise TypeError("State must be an instance of State")
+            Registered state instance
 
-        if name in self.states:
-            raise ArgumentError(None, f"State '{name}' is already registered")
-        self.states[name] = state
+        Raises:
+            KeyError: If state is not registered
+            TypeError: If state type does not match expected_type
+        """
+        if name not in self.states:
+            raise KeyError(f"State '{name}' is not registered")
+
+        state = self.states[name]
+        if expected_type and not isinstance(state, expected_type):
+            raise TypeError(
+                f"State '{name}' is not of expected type {expected_type.__name__}"
+            )
+
         return state
 
-    def load(self):
+    async def load(self):
         """Load all states from disk."""
         logger.info("Loading state...")
         for name, state in self.states.items():
             filepath = self._get_state_path(name)
-            state.load(str(filepath))
+            if not filepath.exists():
+                continue
+            async with aiofiles.open(filepath, "r", encoding="utf-8") as f:
+                content = await f.read()
+            data = state.parse(content)
+            state.load(data)
             logger.info(f"Loaded {name} state")
 
     async def save(self):
@@ -420,11 +408,14 @@ class StateManager:
         async with self.lock:
             logger.info("Saving state...")
             for name, state in self.states.items():
-                if state.changed():
-                    filepath = self._get_state_path(name)
-                    state.save(str(filepath))
-                    changed = True
-                    logger.debug(f"Saved {name} state")
+                if not state.changed():
+                    continue
+                data = state.export()
+                filepath = self._get_state_path(name)
+                await self._atomic_save(filepath, data)
+                state.set_changed(False)
+                changed = True
+                logger.debug(f"Saved {name} state")
 
         if changed:
             logger.info("All states saved")
@@ -432,7 +423,21 @@ class StateManager:
         else:
             logger.debug("No changes detected")
 
-    async def backup(self):
+    async def _atomic_save(self, path: str | Path, data: str):
+        """Atomically save state data to disk.
+
+        Args:
+            path: Path to state file
+            data: State data to save
+        """
+        filepath = Path(path)
+        temp_path = filepath.with_suffix(".tmp")
+
+        async with aiofiles.open(temp_path, "w", encoding="utf-8") as f:
+            await f.write(data)
+        os.replace(temp_path, filepath)
+
+    def backup(self):
         """Create backup of all registered states."""
         if not self._need_backup:
             logger.debug("No changes detected, skipping backup")
@@ -462,8 +467,12 @@ class StateManager:
         logger.info(f"All states backed up to {backup_path}")
         self._need_backup = False
 
-    async def restore(self, timestamp: Optional[str] = None):
+    def restore(self, timestamp: Optional[str] = None):
         """Restore all states from backup.
+
+        Restore just copies state files from the backup, overwriting current state files.
+        But it does not load them into current StateManager.
+        It's highly recommended to create a new StateManager instance after restore.
 
         Args:
             timestamp: Timestamp of the backup to restore (format: YYYYMMDD_HHMMSS
@@ -500,7 +509,6 @@ class StateManager:
                 logger.debug(f"Restored {name}")
 
         if restored > 0:
-            self.load()
             logger.info(f"Restored {restored} states from {backup_path.name}")
         else:
             logger.warning("No states restored")
