@@ -2,7 +2,16 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    import ujson as json
+
     from .. import Proxy
+else:
+    try:
+        import ujson as json
+    except ImportError:
+        import json
+
+__all__ = ["json"]  # just to get rid of stupid linter warning
 
 
 def validate_proxy(proxy: "Proxy") -> bool:

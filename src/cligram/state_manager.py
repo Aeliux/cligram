@@ -10,17 +10,11 @@ from abc import ABC, abstractmethod
 from argparse import ArgumentError
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Optional, TypeVar, Union, overload
+from typing import Any, Dict, Optional, TypeVar, Union, overload
 
 import aiofiles
 
-if TYPE_CHECKING:
-    import ujson as json
-else:
-    try:
-        import ujson as json
-    except ImportError:
-        import json
+from . import utils
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -132,8 +126,8 @@ class JsonState(State):
             ValueError: If file content is invalid
         """
         try:
-            data = json.loads(content)
-        except json.JSONDecodeError as e:
+            data = utils.json.loads(content)
+        except utils.json.JSONDecodeError as e:
             raise ValueError(f"Invalid JSON content: {e}") from e
 
         if not isinstance(data, (dict, list)):
@@ -176,7 +170,7 @@ class JsonState(State):
         """
         self.ensure_schema(self.data)
         normalized = JsonState._sets_to_lists(self.data)
-        json_data = json.dumps(normalized, sort_keys=True)
+        json_data = utils.json.dumps(normalized, sort_keys=True)
         return json_data
 
     def changed(self) -> bool:
@@ -217,7 +211,7 @@ class JsonState(State):
         """Get a hash of the current state data."""
         m = hashlib.sha256()
         json_data = JsonState._sets_to_lists(self.data)
-        m.update(json.dumps(json_data, sort_keys=True).encode("utf-8"))
+        m.update(utils.json.dumps(json_data, sort_keys=True).encode("utf-8"))
         return m.hexdigest()
 
     @classmethod
@@ -460,7 +454,7 @@ class StateManager:
 
             src = self._get_state_path(name)
             if src.exists():
-                dest = backup_path / f"{name}.json"
+                dest = backup_path / f"{name}{state.suffix}"
                 shutil.copy2(src, dest)
                 logger.debug(f"Backed up {name}")
 
@@ -501,7 +495,7 @@ class StateManager:
         for name, state in self.states.items():
             if state.changed():
                 raise RuntimeError(f"Cannot restore state with unsaved changes: {name}")
-            backup = backup_path / f"{name}.json"
+            backup = backup_path / f"{name}{state.suffix}"
             target = self._get_state_path(name)
             if backup.exists():
                 shutil.copy2(backup, target)

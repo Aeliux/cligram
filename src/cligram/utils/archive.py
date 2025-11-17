@@ -244,11 +244,11 @@ class Archive:
             Archive instance with loaded data
         """
         loop = asyncio.get_event_loop()
-        data = await loop.run_in_executor(
-            None,
-            base64.b64decode,
-            b64_string.encode("utf-8"),
+        # Handle both str and bytes input
+        b64_bytes = (
+            b64_string.encode("utf-8") if isinstance(b64_string, str) else b64_string
         )
+        data = await loop.run_in_executor(None, base64.b64decode, b64_bytes)
         return await cls.from_bytes(data, password, compression)
 
     @classmethod
@@ -293,9 +293,9 @@ class Archive:
 
     def _get_tar_mode(self, mode: str) -> str:
         """Get tarfile mode with compression."""
-        if self.compression.value:
-            return f"{mode}:{self.compression.value}"
-        return mode
+        if self.compression == CompressionType.NONE:
+            return mode
+        return f"{mode}:{self.compression.value}"
 
     def _check_size_limit(self, additional_size: int = 0) -> None:
         """Check if adding data would exceed size limit."""
@@ -333,16 +333,32 @@ class Archive:
         buffer = io.BytesIO(data)
         entries = {}
 
-        with tarfile.open(fileobj=buffer, mode=self._get_tar_mode("r")) as tar:  # type: ignore
-            for member in tar.getmembers():
-                content = None
-                if member.isfile():
-                    file_obj = tar.extractfile(member)
-                    if file_obj:
-                        content = file_obj.read()
+        # Try to open with specified compression first
+        try:
+            mode = self._get_tar_mode("r")
+            with tarfile.open(fileobj=buffer, mode=mode) as tar:
+                for member in tar.getmembers():
+                    content = None
+                    if member.isfile():
+                        file_obj = tar.extractfile(member)
+                        if file_obj:
+                            content = file_obj.read()
 
-                entry = ArchiveEntry.from_tar_member(member, content)
-                entries[entry.name] = entry
+                    entry = ArchiveEntry.from_tar_member(member, content)
+                    entries[entry.name] = entry
+        except (tarfile.ReadError, tarfile.CompressionError):
+            # Fallback to auto-detect compression if specified mode fails
+            buffer.seek(0)
+            with tarfile.open(fileobj=buffer, mode="r:*") as tar:
+                for member in tar.getmembers():
+                    content = None
+                    if member.isfile():
+                        file_obj = tar.extractfile(member)
+                        if file_obj:
+                            content = file_obj.read()
+
+                    entry = ArchiveEntry.from_tar_member(member, content)
+                    entries[entry.name] = entry
 
         return entries
 
@@ -350,7 +366,8 @@ class Archive:
         """Build tar archive from entries."""
         buffer = io.BytesIO()
 
-        with tarfile.open(fileobj=buffer, mode=self._get_tar_mode("w")) as tar:  # type: ignore
+        mode = self._get_tar_mode("w")
+        with tarfile.open(fileobj=buffer, mode=mode) as tar:
             for entry in self._entries.values():
                 tar_info = entry.to_tar_info()
 
@@ -493,9 +510,7 @@ class Archive:
 
         return entries
 
-    async def add_bytes(
-        self, name: str, data: bytes, mode: int = 0o644
-    ) -> ArchiveEntry:
+    def add_bytes(self, name: str, data: bytes, mode: int = 0o644) -> ArchiveEntry:
         """Add file from bytes to archive.
 
         Args:

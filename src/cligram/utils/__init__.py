@@ -1,5 +1,5 @@
 from . import archive, telegram
-from .general import shorten_path, validate_proxy
+from .general import json, shorten_path, validate_proxy
 from .telegram import get_client, get_entity_name, get_session, get_status
 
 from .device import (  # isort:skip
@@ -27,4 +27,5 @@ __all__ = [
     "archive",
     "Archive",
     "shorten_path",
+    "json",
 ]

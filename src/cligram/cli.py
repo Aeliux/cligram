@@ -98,6 +98,68 @@ def interactive(
     app.start(interactive.main)
 
 
+@app.command("export")
+def export(
+    ctx: typer.Context,
+    output: Optional[Path] = typer.Argument(
+        None,
+        help="Output path for exported data, defaults to stdout",
+    ),
+    password: Optional[str] = typer.Option(
+        None,
+        "-p",
+        "--password",
+        help="Password for encrypting exported data",
+    ),
+    no_config: bool = typer.Option(
+        False,
+        "--no-config",
+        help="Exclude the current configuration from the export",
+    ),
+    exported_sessions: List[str] = typer.Option(
+        [],
+        "--session",
+        help="Specific session names to include in the export, can be used multiple times."
+        " They must be visible in session list command.",
+    ),
+    exported_states: List[str] = typer.Option(
+        [],
+        "--state",
+        help="Specific state names to include in the export, can be used multiple times",
+    ),
+    all_sessions: bool = typer.Option(
+        False,
+        "--all-sessions",
+        help="Include all sessions in the export",
+    ),
+    all_states: bool = typer.Option(
+        False,
+        "--all-states",
+        help="Include all states in the export",
+    ),
+    all_data: bool = typer.Option(
+        False,
+        "--all",
+        "-a",
+        help="Export everything (sessions, states, and configuration)",
+    ),
+):
+    """Export cligram data."""
+    from .tasks import transfer
+
+    config: "Config" = ctx.obj["cligram.init:core"]()
+    config.temp["cligram.transfer:export"] = transfer._ExportConfig(
+        export_config=not no_config,
+        exported_sessions="*" if all_sessions or all_data else exported_sessions,
+        exported_states="*" if all_states or all_data else exported_states,
+        path=output,
+        password=password,
+    )
+
+    app: "Application" = ctx.obj["cligram.init:app"]()
+    app.start(transfer.export)
+
+
 @app.command("info")
 def info():
     """Display information about cligram and current environment."""
