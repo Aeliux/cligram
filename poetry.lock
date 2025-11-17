@@ -183,6 +183,7 @@ files = [
 
 [package.dependencies]
 frozenlist = ">=1.1.0"
+typing-extensions = {version = ">=4.2", markers = "python_version < \"3.13\""}
 
 [[package]]
 name = "alabaster"
@@ -211,6 +212,7 @@ files = [
 [package.dependencies]
 idna = ">=2.8"
 sniffio = ">=1.1"
+typing_extensions = {version = ">=4.5", markers = "python_version < \"3.13\""}
 
 [package.extras]
 trio = ["trio (>=0.31.0)"]
@@ -2317,6 +2319,7 @@ files = [
 
 [package.dependencies]
 pytest = ">=8.2,<10"
+typing-extensions = {version = ">=4.12", markers = "python_version < \"3.13\""}
 
 [package.extras]
 docs = ["sphinx (>=5.3)", "sphinx-rtd-theme (>=1)"]
@@ -2849,6 +2852,7 @@ files = [
 
 [package.dependencies]
 anyio = ">=3.6.2,<5"
+typing-extensions = {version = ">=4.10.0", markers = "python_version < \"3.13\""}
 
 [package.extras]
 full = ["httpx (>=0.27.0,<0.29.0)", "itsdangerous", "jinja2", "python-multipart (>=0.0.18)", "pyyaml"]
@@ -3474,5 +3478,5 @@ speedups = ["aiohttp", "cryptg", "hachoir", "pillow", "ujson"]
 
 [metadata]
 lock-version = "2.1"
-python-versions = "<4.0,>=3.13"
-content-hash = "4db9eb8c0cbb547a90e750a648e2807d201c17dcd7f84e4826957ff264be54a5"
+python-versions = "==3.12.10"
+content-hash = "84eb7de18b2f6048494502382dec51955af61a3d3fc83e01f1a2ac293d24ada5"

@@ -10,7 +10,6 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Tuple, overload
-from warnings import deprecated
 
 from . import GLOBAL_CONFIG_PATH, exceptions
 
@@ -18,7 +17,6 @@ _config_instance: Optional["Config"] = None
 logger = logging.getLogger(__name__)
 
 
-@deprecated("Unmaintained")
 class ScanMode(Enum):
     """Operation modes for the scanner."""
 
