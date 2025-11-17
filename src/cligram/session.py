@@ -46,7 +46,6 @@ class CustomSession(SQLiteSession):
             session_path.suffix == ".session"
             or session_path.is_absolute()
             or os.path.sep in session_id
-            or "/" in session_id
         ):
             if not session_path.exists() and not create:
                 raise exceptions.SessionNotFoundError(
@@ -150,7 +149,12 @@ class CustomSession(SQLiteSession):
     @classmethod
     def list_sessions(cls) -> List[str]:
         """List all session files."""
-        sessions: Set[Path] = set()
+        sessions: Dict[str, Path] = {}
         for search_dir in get_search_paths():
-            sessions.update(search_dir.glob("*.session"))
-        return [str(s) for s in sessions]
+            if not search_dir.exists():
+                continue
+            for session_file in search_dir.glob("*.session"):
+                session_id = session_file.stem
+                if session_id not in sessions:
+                    sessions[session_id] = session_file
+        return [str(s) for s in sessions.values()]

@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import typer
@@ -42,7 +43,7 @@ def list_sessions(
     if sessions:
         typer.echo("Available sessions:")
         for s in sessions:
-            typer.echo(utils.shorten_path(s))
+            typer.echo(f"{Path(s).stem} from ({utils.shorten_path(s)})")
     else:
         typer.echo("No sessions found.")
     raise typer.Exit()
