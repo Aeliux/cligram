@@ -2346,21 +2346,6 @@ pytest = ">=7"
 testing = ["process-tests", "pytest-xdist", "virtualenv"]
 
 [[package]]
-name = "python-dotenv"
-version = "1.2.1"
-description = "Read key-value pairs from a .env file and set them as environment variables"
-optional = false
-python-versions = ">=3.9"
-groups = ["dev"]
-files = [
-    {file = "python_dotenv-1.2.1-py3-none-any.whl", hash = "sha256:b81ee9561e9ca4004139c6cbba3a238c32b03e4894671e181b671e8cb8425d61"},
-    {file = "python_dotenv-1.2.1.tar.gz", hash = "sha256:42667e897e16ab0d66954af0e60a9caa94f0fd4ecf3aaf6d2d260eec1aa36ad6"},
-]
-
-[package.extras]
-cli = ["click (>=5.0)"]
-
-[[package]]
 name = "python-socks"
 version = "2.7.3"
 description = "Proxy (SOCKS4, SOCKS5, HTTP CONNECT) client for Python"
@@ -2972,7 +2957,7 @@ files = [
     {file = "typing_extensions-4.15.0-py3-none-any.whl", hash = "sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548"},
     {file = "typing_extensions-4.15.0.tar.gz", hash = "sha256:0cea48d173cc12fa28ecabc3b837ea3cf6f38c6d1136f85cbaaf598984861466"},
 ]
-markers = {docs = "python_version == \"3.12\""}
+markers = {docs = "python_version < \"3.13\""}
 
 [[package]]
 name = "ujson"
@@ -3479,5 +3464,5 @@ speedups = ["aiohttp", "cryptg", "hachoir", "pillow", "ujson"]
 
 [metadata]
 lock-version = "2.1"
-python-versions = "<4.0,>=3.12"
-content-hash = "874879836c8a8826b0286ba70b864553f1c6a81ae940fef39783a013e5f8023d"
+python-versions = "<4.0,>=3.11"
+content-hash = "ee4ea6836ac4138449c0917f80e6decd700cfb3b7f87ad6e60bc5295f07e12a5"
