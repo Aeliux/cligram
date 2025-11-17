@@ -162,9 +162,6 @@ def init(ctx: typer.Context) -> "Config":
 
     lconfig = Config.get_config(raise_if_failed=False)
     if lconfig is not None:
-        typer.echo(
-            "[yellow]Warning:[/yellow] Configuration was already loaded. Using existing configuration."
-        )
         return lconfig
     config: Optional[Path] = ctx.obj["cligram.args:config"]
 
