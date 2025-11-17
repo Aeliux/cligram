@@ -468,6 +468,9 @@ class Config:
     overridden: bool = False
     """Indicates if the configuration was overridden via CLI"""
 
+    temp: Dict[str, Any] = field(default_factory=dict)
+    """Temporary in-memory configuration data"""
+
     @property
     def base_path(self) -> Path:
         """Get base directory of the configuration file."""
