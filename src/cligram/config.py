@@ -57,6 +57,19 @@ class ApiConfig:
         digest = hasher.digest()
         return base64.urlsafe_b64encode(digest).decode("utf-8")[:8]
 
+    def __str__(self) -> str:
+        return "ApiConfig(id=***, hash=***)"
+
+    def __repr__(self) -> str:
+        return str(self)
+
+    def _intercept(self, attr: str) -> Any:
+        if attr == "identifier":
+            return self.identifier
+        elif attr in ("id", "hash"):
+            return "***REDACTED***"
+        return getattr(self, attr)
+
     @classmethod
     def _from_dict(cls, data: Dict[str, Any]) -> "ApiConfig":
         return cls(
@@ -637,11 +650,12 @@ class Config:
 
         setattr(obj, attr, value)
 
-    def get_nested_value(self, path: str) -> Any:
+    def get_nested_value(self, path: str, bypass_interceptor: bool = False) -> Any:
         """Get a nested configuration value using dot notation.
 
         Args:
             path: Dot-separated path to value (e.g., "app.verbose")
+            bypass_interceptor: Whether to bypass attribute interceptor
 
         Returns:
             Value at the specified path
@@ -655,7 +669,14 @@ class Config:
         for part in parts:
             if not hasattr(obj, part):
                 raise ValueError(f"Invalid path: {path}. '{part}' not found.")
-            obj = getattr(obj, part)
+            interceptor = getattr(obj, "_intercept", None)
+            if bypass_interceptor or interceptor is None:
+                obj = getattr(obj, part)
+            else:
+                obj = interceptor(part)
+
+        if isinstance(obj, Enum):
+            return obj.value
 
         return obj
 

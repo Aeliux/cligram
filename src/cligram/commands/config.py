@@ -56,7 +56,7 @@ def list_configs(
     config: Config = ctx.obj["cligram.init:core"]()
     flatted = Config._flatten_dict(config.to_dict())
     for key, value in flatted.items():
-        typer.echo(f"{key}={value}")
+        typer.echo(f"{key}={config.get_nested_value(key)}")
     raise typer.Exit()
 
 
