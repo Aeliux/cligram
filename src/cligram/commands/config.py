@@ -33,7 +33,7 @@ def create_config(
 
     def_config = Config()
 
-    if not no_interactive:
+    if not no_interactive and not def_config.telegram.api.from_env:
         typer.echo("Creating default configuration. Press Enter to accept defaults.")
         api_id = typer.prompt(
             "Telegram API ID", default=str(def_config.telegram.api.id)

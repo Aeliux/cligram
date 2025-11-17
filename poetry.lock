@@ -2346,6 +2346,21 @@ pytest = ">=7"
 testing = ["process-tests", "pytest-xdist", "virtualenv"]
 
 [[package]]
+name = "python-dotenv"
+version = "1.2.1"
+description = "Read key-value pairs from a .env file and set them as environment variables"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "python_dotenv-1.2.1-py3-none-any.whl", hash = "sha256:b81ee9561e9ca4004139c6cbba3a238c32b03e4894671e181b671e8cb8425d61"},
+    {file = "python_dotenv-1.2.1.tar.gz", hash = "sha256:42667e897e16ab0d66954af0e60a9caa94f0fd4ecf3aaf6d2d260eec1aa36ad6"},
+]
+
+[package.extras]
+cli = ["click (>=5.0)"]
+
+[[package]]
 name = "python-socks"
 version = "2.7.3"
 description = "Proxy (SOCKS4, SOCKS5, HTTP CONNECT) client for Python"
@@ -3465,4 +3480,4 @@ speedups = ["aiohttp", "cryptg", "hachoir", "pillow", "ujson"]
 [metadata]
 lock-version = "2.1"
 python-versions = "<4.0,>=3.11"
-content-hash = "ee4ea6836ac4138449c0917f80e6decd700cfb3b7f87ad6e60bc5295f07e12a5"
+content-hash = "82617b1fc97b5f2bf6484eea7eeb070a9a17cb8b90904ef59b4296a572635efb"

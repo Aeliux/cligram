@@ -6,8 +6,9 @@ from typing import TYPE_CHECKING, List, Optional
 
 import typer
 from click import ClickException
+from dotenv import load_dotenv
 
-from . import commands, exceptions, utils
+from . import DEFAULT_PATH, commands, exceptions, utils
 from .logger import setup_logger, setup_preinit_logger
 
 if TYPE_CHECKING:
@@ -136,8 +137,6 @@ def callback(
     ),
 ):
     """CLI context setup."""
-    setup_preinit_logger()
-
     logger.info("Starting cligram CLI")
 
     ctx.obj = {}
@@ -204,4 +203,11 @@ def init_app(ctx: typer.Context) -> "Application":
 
 def main():
     """Main entry point for the CLI."""
+    setup_preinit_logger()
+
+    dotenv_paths = [Path(".env"), DEFAULT_PATH / ".env", Path.home() / ".cligram.env"]
+    for dotenv_path in dotenv_paths:
+        if dotenv_path.is_file():
+            load_dotenv(dotenv_path)
+
     app()

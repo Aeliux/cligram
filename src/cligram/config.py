@@ -49,6 +49,9 @@ class ApiConfig:
     hash: str = ""
     """Telegram API hash string obtained from my.telegram.org/apps"""
 
+    from_env: bool = field(init=False, default=False)
+    """Indicates if the credentials were loaded from environment variables"""
+
     @property
     def identifier(self) -> str:
         """Get unique identifier for the API credentials."""
@@ -57,11 +60,40 @@ class ApiConfig:
         digest = hasher.digest()
         return base64.urlsafe_b64encode(digest).decode("utf-8")[:8]
 
+    def __post_init__(self):
+        self._load_from_env()
+
+        if not isinstance(self.id, int):
+            raise ValueError("API ID must be an integer")
+        if not isinstance(self.hash, str):
+            raise ValueError("API hash must be a string")
+
     def __str__(self) -> str:
         return "ApiConfig(id=***, hash=***)"
 
     def __repr__(self) -> str:
         return str(self)
+
+    def _load_from_env(self) -> None:
+        """Load API credentials from environment variables."""
+        import os
+
+        api_id = os.getenv("CLIGRAM_API_ID")
+        api_hash = os.getenv("CLIGRAM_API_HASH")
+        self.from_env = all([api_id, api_hash])
+        if not self.from_env:
+            return
+
+        if api_id is not None:
+            try:
+                self.id = int(api_id)
+            except ValueError:
+                raise ValueError(
+                    "Environment variable CLIGRAM_API_ID must be an integer"
+                )
+
+        if api_hash is not None:
+            self.hash = api_hash
 
     def _intercept(self, attr: str) -> Any:
         if attr == "identifier":
@@ -78,7 +110,14 @@ class ApiConfig:
         )
 
     def _to_dict(self) -> Dict[str, Any]:
-        return {"id": self.id, "hash": self.hash}
+        return (
+            {
+                "id": self.__dataclass_fields__["id"].default,
+                "hash": self.__dataclass_fields__["hash"].default,
+            }
+            if self.from_env
+            else {"id": self.id, "hash": self.hash}
+        )
 
 
 @dataclass
