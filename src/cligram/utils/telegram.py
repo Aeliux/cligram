@@ -32,7 +32,7 @@ def get_client(
     session: Optional["CustomSession"],
 ) -> TelegramClient:
     """Create a Telethon TelegramClient from the given configuration."""
-    from .. import __version__
+    from .. import __version_tuple__
 
     logger.info("Creating Telegram client")
 
@@ -58,7 +58,7 @@ def get_client(
         "connection_retries": 2,  # Number of attempts before failing
         "device_model": model,
         "system_version": title,
-        "app_version": __version__,  # Package version
+        "app_version": ".".join(map(str, __version_tuple__[:3])),  # only report the stable version parts
         "lang_code": "en",  # Language to use for Telegram
         "timeout": 10,  # Timeout in seconds for requests
     }
