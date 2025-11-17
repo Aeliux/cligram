@@ -255,7 +255,9 @@ class AndroidDetector:
     def get_device_model() -> str | None:
         """Get Android device model and manufacturer."""
         manufacturer = AndroidDetector.get_property("ro.product.manufacturer")
-        model = AndroidDetector.get_property("ro.product.model")
+        model = AndroidDetector.get_property(
+            "ro.product.marketname"
+        ) or AndroidDetector.get_property("ro.product.model")
 
         if manufacturer and model:
             # Avoid duplication if model already contains manufacturer
