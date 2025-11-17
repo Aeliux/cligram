@@ -208,6 +208,7 @@ def main():
     dotenv_paths = [Path(".env"), DEFAULT_PATH / ".env", Path.home() / ".cligram.env"]
     for dotenv_path in dotenv_paths:
         if dotenv_path.is_file():
+            logger.info(f"Loading environment variables from: {dotenv_path}")
             load_dotenv(dotenv_path)
 
     app()

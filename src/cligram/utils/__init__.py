@@ -1,5 +1,5 @@
 from . import archive, telegram
-from .general import validate_proxy
+from .general import shorten_path, validate_proxy
 from .telegram import get_client, get_entity_name, get_session, get_status
 
 from .device import (  # isort:skip
@@ -10,7 +10,7 @@ from .device import (  # isort:skip
     get_device_info,
 )
 
-from .archive import AsyncArchive  # isort:skip
+from .archive import Archive  # isort:skip
 
 __all__ = [
     "telegram",
@@ -25,5 +25,6 @@ __all__ = [
     "Platform",
     "Environment",
     "archive",
-    "AsyncArchive",
+    "Archive",
+    "shorten_path",
 ]

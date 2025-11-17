@@ -135,25 +135,25 @@ class ArchiveEntry:
         }
 
 
-class AsyncArchive:
+class Archive:
     """High-performance async archive with encryption and streaming support.
 
     The archive data is held in memory by default for fast operations.
     Decryption happens only on load, encryption only on export.
 
     Examples:
-        # Create new archive
-        archive = AsyncArchive(password="secret")
-        await archive.add_file("file.txt")
-        await archive.write("output.tar.gz")
+        # Create archive from directory and save to file
+        async with Archive.from_directory("my_folder", password="secret") as archive:
+            await archive.write("archive.tar.gz")
 
-        # Load existing archive
-        archive = await AsyncArchive.load("input.tar.gz", password="secret")
-        content = await archive.get_file("file.txt")
+        # Load archive from file and extract
+        async with await Archive.load("archive.tar.gz", password="secret") as archive:
+            await archive.extract("output_folder")
 
-        # Work with in-memory data
-        data = await archive.to_bytes()
-        b64 = await archive.to_base64()
+        # Create archive from bytes
+        data = b"..."  # Encrypted archive bytes
+        async with await Archive.from_bytes(data, password="secret") as archive:
+            file_content = await archive.get_file("document.txt")
     """
 
     # Maximum archive size in memory (50 MB)
@@ -190,7 +190,7 @@ class AsyncArchive:
         path: Union[str, Path],
         password: Optional[str] = None,
         compression: Union[str, CompressionType] = CompressionType.GZIP,
-    ) -> "AsyncArchive":
+    ) -> "Archive":
         """Load archive from file.
 
         Args:
@@ -199,7 +199,7 @@ class AsyncArchive:
             compression: Compression type
 
         Returns:
-            AsyncArchive instance with loaded data
+            Archive instance with loaded data
         """
         archive = cls(password=password, compression=compression)
         await archive.read(path)
@@ -211,16 +211,16 @@ class AsyncArchive:
         data: bytes,
         password: Optional[str] = None,
         compression: Union[str, CompressionType] = CompressionType.GZIP,
-    ) -> "AsyncArchive":
-        """Create archive from bytes.
+    ) -> "Archive":
+        """Load archive from bytes.
 
         Args:
-            data: Archive bytes (encrypted if password provided)
+            data: Archive data bytes
             password: Password for decryption
             compression: Compression type
 
         Returns:
-            AsyncArchive instance with loaded data
+            Archive instance with loaded data
         """
         archive = cls(password=password, compression=compression)
         await archive._load_from_bytes(data)
@@ -232,8 +232,8 @@ class AsyncArchive:
         b64_string: str,
         password: Optional[str] = None,
         compression: Union[str, CompressionType] = CompressionType.GZIP,
-    ) -> "AsyncArchive":
-        """Create archive from base64 string.
+    ) -> "Archive":
+        """Load archive from base64 string.
 
         Args:
             b64_string: Base64 encoded archive
@@ -241,7 +241,7 @@ class AsyncArchive:
             compression: Compression type
 
         Returns:
-            AsyncArchive instance with loaded data
+            Archive instance with loaded data
         """
         loop = asyncio.get_event_loop()
         data = await loop.run_in_executor(
@@ -257,7 +257,7 @@ class AsyncArchive:
         directory: Union[str, Path],
         password: Optional[str] = None,
         compression: Union[str, CompressionType] = CompressionType.GZIP,
-    ) -> "AsyncArchive":
+    ) -> "Archive":
         """Create archive from directory.
 
         Args:
@@ -266,7 +266,7 @@ class AsyncArchive:
             compression: Compression type
 
         Returns:
-            AsyncArchive instance with directory contents
+            Archive instance with directory contents
         """
         archive = cls(password=password, compression=compression)
         await archive.add_directory(directory)

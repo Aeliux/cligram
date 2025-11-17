@@ -42,7 +42,7 @@ def list_sessions(
     if sessions:
         typer.echo("Available sessions:")
         for s in sessions:
-            typer.echo(s)
+            typer.echo(utils.shorten_path(s))
     else:
         typer.echo("No sessions found.")
     raise typer.Exit()
