@@ -58,7 +58,9 @@ def get_client(
         "connection_retries": 2,  # Number of attempts before failing
         "device_model": model,
         "system_version": title,
-        "app_version": ".".join(map(str, __version_tuple__[:3])),  # only report the stable version parts
+        "app_version": ".".join(
+            map(str, __version_tuple__[:3])
+        ),  # only report the stable version parts
         "lang_code": "en",  # Language to use for Telegram
         "timeout": 10,  # Timeout in seconds for requests
     }
