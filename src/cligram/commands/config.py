@@ -62,11 +62,18 @@ def list_configs(
 
 @app.command("get")
 def get_config(
-    ctx: typer.Context, key: str = typer.Argument(help="Configuration key to retrieve")
+    ctx: typer.Context,
+    key: str = typer.Argument(help="Configuration key to retrieve"),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        "-f",
+        help="Force retrieval even if the key is sensitive",
+    ),
 ):
     """Get a specific configuration value."""
     config: Config = ctx.obj["cligram.init:core"]()
-    value = config.get_nested_value(key)
+    value = config.get_nested_value(key, bypass_interceptor=force)
     if value is not None:
         typer.echo(f"{key}={value}")
     else:
