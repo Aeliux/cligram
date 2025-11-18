@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple, TypeVar, Union, overload
+from typing import Any, Dict, List, Optional, Tuple, TypeVar, Union, overload
 
 from telethon.sessions import SQLiteSession
 
