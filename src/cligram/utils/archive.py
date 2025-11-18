@@ -3,11 +3,11 @@ import base64
 import io
 import os
 import tarfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import AsyncIterator, Dict, List, Optional, Union
+from typing import Dict, Iterator, List, Optional, Union
 
 import aiofiles
 from cryptography.fernet import Fernet
@@ -32,26 +32,130 @@ class FileType(Enum):
     SYMLINK = "symlink"
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class ArchiveEntry:
-    """Represents an entry in the archive."""
+    """Represents an entry in the archive.
+
+    This is an immutable value object that represents a file, directory, or symlink
+    in an archive. Content hash is computed lazily on first access and cached.
+    """
 
     name: str
+    """Entry name/path in the archive."""
+
     size: int
+    """Size of the entry in bytes."""
+
     file_type: FileType
+    """Type of the entry."""
+
     mode: int
+    """File mode/permissions."""
+
     mtime: datetime
-    content: Optional[bytes] = None  # File content for in-memory storage
+    """Last modification time."""
+
+    _content: Optional[bytes] = None
+    """Content of the file entry. Should only be set for FILE type."""
+
     uid: int = 0
+    """User ID of the entry."""
+
     gid: int = 0
-    uname: str = ""
-    gname: str = ""
+    """Group ID of the entry."""
+
+    _uname: str = ""
+    """User name of the entry (cached)."""
+
+    _gname: str = ""
+    """Group name of the entry (cached)."""
+
+    _content_hash_cache: Optional[bytes] = field(default=None, init=False)
+    """Cached SHA-256 hash of content."""
+
+    def __post_init__(self):
+        """Validate entry and pre-compute expensive operations."""
+        # Validation
+        if self.file_type == FileType.FILE and self._content is None:
+            raise ValueError("File entries must have content.")
+        if self.file_type != FileType.FILE and self._content is not None:
+            raise ValueError("Only file entries can have content.")
+
+        # Pre-compute and cache content hash for files to avoid recomputation
+        # This is critical for __hash__ and __eq__ performance
+        if self._content is not None:
+            digest = hashes.Hash(hashes.SHA256())
+            digest.update(self._content)
+            # Use object.__setattr__ because dataclass is frozen
+            object.__setattr__(self, "_content_hash_cache", digest.finalize())
+
+    @property
+    def content(self) -> Optional[bytes]:
+        """Get content bytes.
+
+        Returns:
+            File content or None for non-file entries
+        """
+        return self._content
+
+    @property
+    def content_hash(self) -> Optional[bytes]:
+        """Get SHA-256 hash of the content.
+
+        Hash is computed once and cached for performance.
+
+        Returns:
+            SHA-256 hash bytes or None for non-file entries
+        """
+        return self._content_hash_cache
+
+    @property
+    def uname(self) -> str:
+        """Get user name (lazy computation with fallback).
+
+        Returns:
+            User name or empty string if unavailable
+        """
+        if self._uname:
+            return self._uname
+
+        try:
+            import pwd
+
+            return pwd.getpwuid(self.uid).pw_name  # type: ignore
+        except (ImportError, KeyError, OSError):
+            return ""
+
+    @property
+    def gname(self) -> str:
+        """Get group name (lazy computation with fallback).
+
+        Returns:
+            Group name or empty string if unavailable
+        """
+        if self._gname:
+            return self._gname
+
+        try:
+            import grp
+
+            return grp.getgrgid(self.gid).gr_name  # type: ignore
+        except (ImportError, KeyError, OSError):
+            return ""
 
     @classmethod
     def from_tar_member(
         cls, member: tarfile.TarInfo, content: Optional[bytes] = None
     ) -> "ArchiveEntry":
-        """Create ArchiveEntry from TarInfo."""
+        """Create ArchiveEntry from TarInfo.
+
+        Args:
+            member: TarInfo object
+            content: File content bytes (required for files)
+
+        Returns:
+            New ArchiveEntry instance
+        """
         if member.isdir():
             file_type = FileType.DIRECTORY
         elif member.issym() or member.islnk():
@@ -65,18 +169,26 @@ class ArchiveEntry:
             file_type=file_type,
             mode=member.mode,
             mtime=datetime.fromtimestamp(member.mtime),
-            content=content,
+            _content=content,
             uid=member.uid,
             gid=member.gid,
-            uname=member.uname,
-            gname=member.gname,
+            _uname=member.uname,
+            _gname=member.gname,
         )
 
     @classmethod
     async def from_file(
         cls, file_path: Path, arcname: Optional[str] = None
     ) -> "ArchiveEntry":
-        """Create ArchiveEntry from file."""
+        """Create ArchiveEntry from file system path.
+
+        Args:
+            file_path: Path to file or directory
+            arcname: Name to use in archive (defaults to file name)
+
+        Returns:
+            New ArchiveEntry instance
+        """
         stat = file_path.stat()
 
         if file_path.is_dir():
@@ -95,13 +207,17 @@ class ArchiveEntry:
             file_type=file_type,
             mode=stat.st_mode,
             mtime=datetime.fromtimestamp(stat.st_mtime),
-            content=content,
-            uid=stat.st_uid if hasattr(stat, "st_uid") else 0,
-            gid=stat.st_gid if hasattr(stat, "st_gid") else 0,
+            _content=content,
+            uid=getattr(stat, "st_uid", 0),
+            gid=getattr(stat, "st_gid", 0),
         )
 
     def to_tar_info(self) -> tarfile.TarInfo:
-        """Convert to TarInfo for writing."""
+        """Convert to TarInfo for writing to tar archive.
+
+        Returns:
+            TarInfo object ready for tar.addfile()
+        """
         info = tarfile.TarInfo(name=self.name)
         info.size = self.size
         info.mode = self.mode
@@ -121,7 +237,11 @@ class ArchiveEntry:
         return info
 
     def to_dict(self) -> dict:
-        """Convert to dictionary."""
+        """Convert to dictionary representation.
+
+        Returns:
+            Dictionary with entry metadata (excludes content)
+        """
         return {
             "name": self.name,
             "size": self.size,
@@ -132,7 +252,69 @@ class ArchiveEntry:
             "gid": self.gid,
             "uname": self.uname,
             "gname": self.gname,
+            "content_hash": self.content_hash.hex() if self.content_hash else None,
         }
+
+    def __hash__(self) -> int:
+        """Compute hash for use in sets and dicts.
+
+        Uses cached content hash for performance. Does not include
+        uname/gname as they can vary by system.
+
+        Returns:
+            Hash value
+        """
+        return hash(
+            (
+                self.name,
+                self.size,
+                self.file_type,
+                self._content_hash_cache,  # Use cached hash
+                self.mode,
+                int(self.mtime.timestamp()),  # Convert to int for consistency
+                self.uid,
+                self.gid,
+            )
+        )
+
+    def __eq__(self, other: object) -> bool:
+        """Check equality with another ArchiveEntry.
+
+        Uses cached content hash for performance. Does not compare
+        uname/gname as they can vary by system.
+
+        Args:
+            other: Object to compare with
+
+        Returns:
+            True if entries are equal
+        """
+        if not isinstance(other, ArchiveEntry):
+            return NotImplemented
+
+        # Fast path: check identity
+        if self is other:
+            return True
+
+        return (
+            self.name == other.name
+            and self.size == other.size
+            and self.file_type == other.file_type
+            and self._content_hash_cache == other._content_hash_cache  # Cached
+            and self.mode == other.mode
+            and self.mtime == other.mtime
+            and self.uid == other.uid
+            and self.gid == other.gid
+        )
+
+    def __repr__(self) -> str:
+        """String representation for debugging."""
+        return (
+            f"ArchiveEntry(name={self.name!r}, "
+            f"type={self.file_type.value}, "
+            f"size={self.size}, "
+            f"mode=0o{self.mode:o})"
+        )
 
 
 class Archive:
@@ -142,6 +324,7 @@ class Archive:
     Decryption happens only on load, encryption only on export.
 
     Examples:
+        ```
         # Create archive from directory and save to file
         async with Archive.from_directory("my_folder", password="secret") as archive:
             await archive.write("archive.tar.gz")
@@ -154,6 +337,7 @@ class Archive:
         data = b"..."  # Encrypted archive bytes
         async with await Archive.from_bytes(data, password="secret") as archive:
             file_content = await archive.get_file("document.txt")
+        ```
     """
 
     # Maximum archive size in memory (50 MB)
@@ -164,7 +348,6 @@ class Archive:
         password: Optional[str] = None,
         compression: Union[str, CompressionType] = CompressionType.GZIP,
         salt: Optional[bytes] = None,
-        chunk_size: int = 8192,
     ):
         # Handle both string and enum for compression
         if isinstance(compression, str):
@@ -175,33 +358,30 @@ class Archive:
         else:
             self.compression = compression
 
-        self.chunk_size = chunk_size
         self._cipher: Optional[Fernet] = None
         self._salt = salt
         self._entries: Dict[str, ArchiveEntry] = {}  # In-memory storage
         self._password = password
 
         if password:
-            self._cipher = self._create_cipher(password, salt)
+            self._cipher = self._create_cipher()
 
     @classmethod
     async def load(
         cls,
         path: Union[str, Path],
-        password: Optional[str] = None,
-        compression: Union[str, CompressionType] = CompressionType.GZIP,
+        **kwargs,
     ) -> "Archive":
         """Load archive from file.
 
         Args:
             path: Path to archive file
-            password: Password for decryption
-            compression: Compression type
+            **kwargs: Additional arguments for Archive constructor
 
         Returns:
             Archive instance with loaded data
         """
-        archive = cls(password=password, compression=compression)
+        archive = cls(**kwargs)
         await archive.read(path)
         return archive
 
@@ -209,20 +389,18 @@ class Archive:
     async def from_bytes(
         cls,
         data: bytes,
-        password: Optional[str] = None,
-        compression: Union[str, CompressionType] = CompressionType.GZIP,
+        **kwargs,
     ) -> "Archive":
         """Load archive from bytes.
 
         Args:
             data: Archive data bytes
-            password: Password for decryption
-            compression: Compression type
+            **kwargs: Additional arguments for Archive constructor
 
         Returns:
             Archive instance with loaded data
         """
-        archive = cls(password=password, compression=compression)
+        archive = cls(**kwargs)
         await archive._load_from_bytes(data)
         return archive
 
@@ -230,15 +408,13 @@ class Archive:
     async def from_base64(
         cls,
         b64_string: str,
-        password: Optional[str] = None,
-        compression: Union[str, CompressionType] = CompressionType.GZIP,
+        **kwargs,
     ) -> "Archive":
         """Load archive from base64 string.
 
         Args:
             b64_string: Base64 encoded archive
-            password: Password for decryption
-            compression: Compression type
+            **kwargs: Additional arguments for Archive constructor
 
         Returns:
             Archive instance with loaded data
@@ -249,42 +425,42 @@ class Archive:
             b64_string.encode("utf-8") if isinstance(b64_string, str) else b64_string
         )
         data = await loop.run_in_executor(None, base64.b64decode, b64_bytes)
-        return await cls.from_bytes(data, password, compression)
+        return await cls.from_bytes(data, **kwargs)
 
     @classmethod
     async def from_directory(
         cls,
         directory: Union[str, Path],
-        password: Optional[str] = None,
-        compression: Union[str, CompressionType] = CompressionType.GZIP,
+        **kwargs,
     ) -> "Archive":
         """Create archive from directory.
 
         Args:
             directory: Directory to archive
-            password: Password for encryption
-            compression: Compression type
+            **kwargs: Additional arguments for Archive constructor
 
         Returns:
             Archive instance with directory contents
         """
-        archive = cls(password=password, compression=compression)
+        archive = cls(**kwargs)
         await archive.add_directory(directory)
         return archive
 
-    def _create_cipher(self, password: str, salt: Optional[bytes] = None) -> Fernet:
+    def _create_cipher(self) -> Fernet:
         """Create Fernet cipher from password."""
-        if salt is None:
-            salt = os.urandom(16)
-            self._salt = salt
+        if not self._password:
+            raise ValueError("Password is required for encryption/decryption.")
+
+        if self._salt is None:
+            self._salt = os.urandom(16)
 
         kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),
             length=32,
-            salt=salt,
+            salt=self._salt,
             iterations=100000,
         )
-        key = base64.urlsafe_b64encode(kdf.derive(password.encode()))
+        key = base64.urlsafe_b64encode(kdf.derive(self._password.encode()))
         return Fernet(key)
 
     def get_salt(self) -> Optional[bytes]:
@@ -332,11 +508,12 @@ class Archive:
         """Parse tar archive to entries (sync)."""
         buffer = io.BytesIO(data)
         entries = {}
+        tar: tarfile.TarFile
 
         # Try to open with specified compression first
         try:
             mode = self._get_tar_mode("r")
-            with tarfile.open(fileobj=buffer, mode=mode) as tar:
+            with tarfile.open(fileobj=buffer, mode=mode) as tar:  # type: ignore
                 for member in tar.getmembers():
                     content = None
                     if member.isfile():
@@ -365,9 +542,10 @@ class Archive:
     def _build_tar_from_entries(self) -> bytes:
         """Build tar archive from entries."""
         buffer = io.BytesIO()
+        tar: tarfile.TarFile
 
         mode = self._get_tar_mode("w")
-        with tarfile.open(fileobj=buffer, mode=mode) as tar:
+        with tarfile.open(fileobj=buffer, mode=mode) as tar:  # type: ignore
             for entry in self._entries.values():
                 tar_info = entry.to_tar_info()
 
@@ -529,7 +707,7 @@ class Archive:
             file_type=FileType.FILE,
             mode=mode,
             mtime=datetime.now(),
-            content=data,
+            _content=data,
         )
 
         self._entries[name] = entry
@@ -548,7 +726,7 @@ class Archive:
             raise FileNotFoundError(f"Entry not found in archive: {name}")
         return self._entries[name]
 
-    async def get_file(self, name: str) -> bytes:
+    def get_file(self, name: str) -> bytes:
         """Get content of a file from archive.
 
         Args:
@@ -634,15 +812,6 @@ class Archive:
 
         return output_dir
 
-    async def stream_files(self) -> AsyncIterator[ArchiveEntry]:
-        """Stream entries from archive.
-
-        Yields:
-            ArchiveEntry objects
-        """
-        for entry in self._entries.values():
-            yield entry
-
     def get_size(self) -> int:
         """Get total size of archive contents in bytes."""
         return sum(entry.size for entry in self._entries.values())
@@ -653,7 +822,7 @@ class Archive:
             1 for entry in self._entries.values() if entry.file_type == FileType.FILE
         )
 
-    async def clear(self) -> None:
+    def clear(self) -> None:
         """Clear archive contents."""
         self._entries.clear()
 
@@ -661,10 +830,30 @@ class Archive:
         """Check if archive is empty."""
         return len(self._entries) == 0
 
-    async def __aenter__(self):
+    def close(self) -> None:
+        """Close the archive and release resources."""
+        self.clear()
+
+    def __enter__(self):
         """Context manager entry."""
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit."""
-        pass  # Nothing to cleanup with in-memory storage
+        self.close()
+
+    def __iter__(self) -> Iterator[ArchiveEntry]:
+        """Iterator over archive entries."""
+        return iter(self._entries.values())
+
+    def __hash__(self):
+        """Hash of the archive based on its contents."""
+        return hash(tuple(sorted(self._entries.keys())))
+
+    def __aenter__(self):
+        """Async context manager entry."""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        self.close()
