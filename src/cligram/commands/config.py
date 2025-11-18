@@ -10,22 +10,13 @@ app = typer.Typer(help="Configuration management")
 @app.command("create")
 def create_config(
     path: Path = typer.Argument(
-        Path("config.json"), help="Path to create the configuration file at"
+        GLOBAL_CONFIG_PATH, help="Path to create the configuration file"
     ),
-    glb: bool = typer.Option(
-        False,
-        "--global",
-        "-g",
-        help="Create global configuration in user home directory",
-    ),
-    no_interactive: bool = typer.Option(
-        False, "--no-interactive", "-n", help="Do not prompt user"
+    no_interaction: bool = typer.Option(
+        False, "--no-interaction", "-n", help="Do not prompt user"
     ),
 ):
     """Create a default configuration file."""
-    if glb:
-        path = GLOBAL_CONFIG_PATH
-
     path = path.resolve()
     if path.exists():
         typer.echo(f"Configuration file already exists at: {path}")
@@ -33,7 +24,7 @@ def create_config(
 
     def_config = Config()
 
-    if not no_interactive and not def_config.telegram.api.from_env:
+    if not no_interaction and not def_config.telegram.api.from_env:
         typer.echo("Creating default configuration. Press Enter to accept defaults.")
         api_id = typer.prompt(
             "Telegram API ID", default=str(def_config.telegram.api.id)
