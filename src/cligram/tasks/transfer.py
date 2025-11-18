@@ -3,10 +3,14 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
-from .. import CustomSession, exceptions, utils
+from rich.progress import BarColumn, Progress, TextColumn
+
+from .. import GLOBAL_CONFIG_PATH, CustomSession, exceptions, utils
 
 if TYPE_CHECKING:
     from .. import Application, CustomSession
+
+TRANSFER_PROTOCOL_VERSION = 1
 
 
 class _ExportType(Enum):
@@ -33,8 +37,8 @@ class _ExportConfig:
 
 
 async def export(app: "Application"):
-    """Export cligram data"""
-    app.status.stop()
+    """Export cligram data."""
+    app.status.update("Preparing export...")
 
     cfg: _ExportConfig = app.config.temp["cligram.transfer:export"]
     interactive = cfg == _ExportConfig()
@@ -42,6 +46,7 @@ async def export(app: "Application"):
     sessions = CustomSession.list_sessions()
 
     if interactive:
+        app.status.stop()
         import questionary
 
         cfg.export_config = await questionary.confirm(
@@ -85,6 +90,8 @@ async def export(app: "Application"):
         ).ask_async()
         cfg.password = password if password else None
 
+        app.status.start()
+
     ex_all_sessions = "*" in cfg.exported_sessions
     ex_all_states = "*" in cfg.exported_states
 
@@ -97,28 +104,84 @@ async def export(app: "Application"):
     if ex_all_states:
         cfg.exported_states = list(app.state.states.keys())
 
+    default_headers = {
+        "cligram.transfer.version": str(TRANSFER_PROTOCOL_VERSION),
+    }
+
+    app.status.update("Exporting data...")
+    progress = Progress(
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+    )
+    progress.start()
+
     async with utils.Archive(password=cfg.password, compression="xz") as archive:
         if cfg.export_config:
+            task = progress.add_task("Exporting configuration", total=3)
+
             data = app.config.to_dict()
+            progress.update(task, advance=1)
+
+            is_global = app.config.path == GLOBAL_CONFIG_PATH
             json = utils.json.dumps(data, indent=4)
-            archive.add_bytes("config.json", json.encode("utf-8"))
-        for session_path in cfg.exported_sessions:
-            session_name = Path(session_path).name
-            await archive.add_file(Path(session_path), f"sessions/{session_name}")
-        for state_name in cfg.exported_states:
-            state = app.state.states[state_name]
-            data = state.export()
-            json = utils.json.dumps(data, indent=4)
+            progress.update(task, advance=1)
+
+            header = {
+                "cligram.transfer.type": "config",
+                "cligram.transfer.config.type": "local" if not is_global else "global",
+            }
             archive.add_bytes(
-                f"states/{state_name}{state.suffix}", json.encode("utf-8")
+                name="config.json",
+                data=json.encode("utf-8"),
+                pax_headers=default_headers | header,
             )
+            progress.update(task, advance=1)
+
+        for session_path in cfg.exported_sessions:
+            session_name = Path(session_path).stem
+            session_suffix = Path(session_path).suffix
+            task = progress.add_task(f"Exporting {session_name} session", total=1)
+            header = {
+                "cligram.transfer.type": "session",
+            }
+            await archive.add_file(
+                Path(session_path),
+                f"sessions/{session_name}{session_suffix}",
+                pax_headers=default_headers | header,
+            )
+            progress.update(task, advance=1)
+
+        for state_name in cfg.exported_states:
+            task = progress.add_task(f"Exporting {state_name} state", total=4)
+
+            state = app.state.states[state_name]
+            progress.update(task, advance=1)
+
+            data = state.export()
+            progress.update(task, advance=1)
+
+            json = utils.json.dumps(data, indent=4)
+            progress.update(task, advance=1)
+
+            header = {
+                "cligram.transfer.type": "state",
+            }
+            archive.add_bytes(
+                f"states/{state_name}{state.suffix}",
+                json.encode("utf-8"),
+                pax_headers=default_headers | header,
+            )
+            progress.update(task, advance=1)
+
+        progress.stop()
 
         if cfg.export_type == _ExportType.FILE and cfg.path is not None:
-            await archive.write(cfg.path)
+            size = await archive.write(cfg.path)
+            app.console.print(
+                f"[green]Exported data to file: [bold]{cfg.path}[/bold] ({size} bytes)[/green]"
+            )
         elif cfg.export_type == _ExportType.BASE64:
             b64 = await archive.to_base64()
-            print("Exported Data (Base64):")
-            print(b64)
-        app.console.print(
-            f"[green]Exported {len(await archive.to_bytes())} bytes[/green]"
-        )
+            app.console.print("[green]Exported data as base64:[/green]\n")
+            app.console.print(b64, markup=False, highlight=False)

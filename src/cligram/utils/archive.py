@@ -92,6 +92,9 @@ class ArchiveEntry:
             # Use object.__setattr__ because dataclass is frozen
             object.__setattr__(self, "_content_hash_cache", digest.finalize())
 
+        # freeze pax_headers to prevent modification
+        object.__setattr__(self, "pax_headers", dict(self.pax_headers))
+
     @property
     def content(self) -> Optional[bytes]:
         """Get content bytes.
@@ -187,13 +190,17 @@ class ArchiveEntry:
 
     @classmethod
     async def from_file(
-        cls, file_path: Path, arcname: Optional[str] = None
+        cls,
+        file_path: Path,
+        arcname: Optional[str] = None,
+        pax_headers: Optional[dict] = None,
     ) -> "ArchiveEntry":
         """Create ArchiveEntry from file system path.
 
         Args:
             file_path: Path to file or directory
             arcname: Name to use in archive (defaults to file name)
+            pax_headers: Optional PAX headers to include
 
         Returns:
             New ArchiveEntry instance
@@ -219,6 +226,7 @@ class ArchiveEntry:
             _content=content,
             uid=getattr(stat, "st_uid", 0),
             gid=getattr(stat, "st_gid", 0),
+            pax_headers=pax_headers or {},
         )
 
     def to_tar_info(self) -> tarfile.TarInfo:
@@ -594,11 +602,14 @@ class Archive:
 
         await self._load_from_bytes(data)
 
-    async def write(self, path: Union[str, Path]) -> None:
+    async def write(self, path: Union[str, Path]) -> int:
         """Write archive to file.
 
         Args:
             path: Output path
+
+        Returns:
+            Number of bytes written
         """
         if not self._entries:
             raise ValueError("Archive is empty. Nothing to write.")
@@ -609,7 +620,7 @@ class Archive:
         path.parent.mkdir(parents=True, exist_ok=True)
 
         async with aiofiles.open(path, "wb") as f:
-            await f.write(data)
+            return await f.write(data)
 
     async def to_bytes(self) -> bytes:
         """Get archive as bytes.
@@ -642,13 +653,17 @@ class Archive:
         return encoded.decode("utf-8")
 
     async def add_file(
-        self, file_path: Union[str, Path], arcname: Optional[str] = None
+        self,
+        file_path: Union[str, Path],
+        arcname: Optional[str] = None,
+        pax_headers: Optional[Dict[str, str]] = None,
     ) -> ArchiveEntry:
         """Add file to archive.
 
         Args:
             file_path: Path to file
             arcname: Name in archive (defaults to filename)
+            pax_headers: Optional PAX extended attributes
 
         Returns:
             Created ArchiveEntry
@@ -662,7 +677,9 @@ class Archive:
             raise ValueError(f"Path is not a file: {file_path}")
 
         name = arcname or file_path.name
-        entry = await ArchiveEntry.from_file(file_path, name)
+        entry = await ArchiveEntry.from_file(
+            file_path, name, pax_headers=pax_headers or {}
+        )
 
         # Check size limit
         self._check_size_limit(entry.size)
@@ -671,13 +688,17 @@ class Archive:
         return entry
 
     async def add_directory(
-        self, dir_path: Union[str, Path], arcname: Optional[str] = None
+        self,
+        dir_path: Union[str, Path],
+        arcname: Optional[str] = None,
+        pax_headers: Optional[Dict[str, str]] = None,
     ) -> List[ArchiveEntry]:
         """Add directory to archive.
 
         Args:
             dir_path: Path to directory
             arcname: Name in archive (defaults to directory name)
+            pax_headers: Optional PAX extended attributes
 
         Returns:
             List of created ArchiveEntry objects
@@ -703,7 +724,9 @@ class Archive:
             rel_path = src_file.relative_to(dir_path)
             arc_path = f"{base_name}/{rel_path}".replace("\\", "/")
 
-            entry = await ArchiveEntry.from_file(src_file, arc_path)
+            entry = await ArchiveEntry.from_file(
+                src_file, arc_path, pax_headers=pax_headers or {}
+            )
             self._check_size_limit(entry.size)
 
             self._entries[arc_path] = entry
