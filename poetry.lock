@@ -2855,22 +2855,6 @@ rsa = "*"
 cryptg = ["cryptg"]
 
 [[package]]
-name = "tenacity"
-version = "9.1.2"
-description = "Retry code until it succeeds"
-optional = false
-python-versions = ">=3.9"
-groups = ["main"]
-files = [
-    {file = "tenacity-9.1.2-py3-none-any.whl", hash = "sha256:f77bf36710d8b73a50b2dd155c97b870017ad21afe6ab300326b0371b3b05138"},
-    {file = "tenacity-9.1.2.tar.gz", hash = "sha256:1169d376c297e7de388d18b4481760d478b0e99a777cad3a9c86e556f4b697cb"},
-]
-
-[package.extras]
-doc = ["reno", "sphinx"]
-test = ["pytest", "tornado (>=4.5)", "typeguard"]
-
-[[package]]
 name = "toml"
 version = "0.10.2"
 description = "Python Library for Tom's Obvious, Minimal Language"
@@ -3443,4 +3427,4 @@ speedups = ["aiohttp", "cryptg", "hachoir", "pillow", "ujson"]
 [metadata]
 lock-version = "2.1"
 python-versions = "<4.0,>=3.11"
-content-hash = "a1ebcb93478e0bd8b2341d9bc034eb3cb70d18bad1bd68b3c22b99f5acc4bc21"
+content-hash = "b594c7e8e2ed9ebb9197bafa131535623a35d7f8a593fbdeb1749c8748c88a70"
