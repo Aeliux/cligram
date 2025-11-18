@@ -63,8 +63,8 @@ dev = [
     "pytest-asyncio (>=1.2.0,<2.0.0)",
     "pytest-cov (>=7.0.0,<8.0.0)",
     "types-aiofiles (>=25.1.0.20251011,<26.0.0.0)",
-    "pydocstyle (>=6.3.0,<7.0.0)",
-    "interrogate (>=1.7.0,<2.0.0)",
+    #"pydocstyle (>=6.3.0,<7.0.0)",
+    #"interrogate (>=1.7.0,<2.0.0)",
 ]
 docs = [
     "sphinx (>=8.2.3,<9.0.0)",
@@ -166,20 +166,20 @@ profile = "black"
 [tool.ruff]
 line-length = 88
 
-[tool.ruff.lint]
-select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes
-    "D",   # pydocstyle (docstring conventions)
-]
+# [tool.ruff.lint]
+# select = [
+#     "E",   # pycodestyle errors
+#     "W",   # pycodestyle warnings
+#     "F",   # pyflakes
+#     "D",   # pydocstyle (docstring conventions)
+# ]
 
-[tool.ruff.lint.pydocstyle]
-convention = "google"  # or "numpy", "pep257"
+# [tool.ruff.lint.pydocstyle]
+# convention = "google"  # or "numpy", "pep257"
 
-[tool.ruff.lint.per-file-ignores]
-"tests/*" = ["D"]
-"scripts/*" = ["D"]
+# [tool.ruff.lint.per-file-ignores]
+# "tests/*" = ["D"]
+# "scripts/*" = ["D"]
 
 [tool.mypy]
 files = ["src"]

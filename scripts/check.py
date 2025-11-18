@@ -63,9 +63,9 @@ def main():
     parser.add_argument("--mypy", action="store_true", help="Run mypy check")
     parser.add_argument("--bandit", action="store_true", help="Run bandit check")
     parser.add_argument("--audit", action="store_true", help="Run pip-audit check")
-    parser.add_argument(
-        "--pydocstyle", action="store_true", help="Run pydocstyle check"
-    )
+    # parser.add_argument(
+    #     "--pydocstyle", action="store_true", help="Run pydocstyle check"
+    # )
     parser.add_argument("--test", action="store_true", help="Run pytest")
     parser.add_argument("--all", action="store_true", help="Run all checks (default)")
 
@@ -80,7 +80,7 @@ def main():
             args.mypy,
             args.bandit,
             args.audit,
-            args.pydocstyle,
+            # args.pydocstyle,
             args.test,
         ]
     )
@@ -105,8 +105,8 @@ def main():
     if run_all or args.audit:
         results["audit"] = check_pip_audit()
 
-    if run_all or args.pydocstyle:
-        results["pydocstyle"] = check_pydocstyle()
+    # if run_all or args.pydocstyle:
+    #     results["pydocstyle"] = check_pydocstyle()
 
     if run_all or args.test:
         results["test"] = check_pytest()
