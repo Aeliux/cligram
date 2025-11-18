@@ -206,6 +206,7 @@ def import_data(
         raise typer.Exit()
 
     app: "Application" = ctx.obj["cligram.init:app"]()
+    app.config.temp["cligram.transfer:import"] = cfg
     app.start(transfer.import_data)
 
 
