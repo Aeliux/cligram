@@ -10,7 +10,7 @@ from .device import (  # isort:skip
     get_device_info,
 )
 
-from .archive import Archive  # isort:skip
+from .archive import Archive, ArchiveEntry  # isort:skip
 
 __all__ = [
     "telegram",
@@ -26,6 +26,7 @@ __all__ = [
     "Environment",
     "archive",
     "Archive",
+    "ArchiveEntry",
     "shorten_path",
     "json",
 ]

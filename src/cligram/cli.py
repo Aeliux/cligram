@@ -1,5 +1,6 @@
 """CLI entry point."""
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional
@@ -164,6 +165,48 @@ def export(
 
     app: "Application" = ctx.obj["cligram.init:app"]()
     app.start(transfer.export)
+
+
+@app.command("import")
+def import_data(
+    ctx: typer.Context,
+    input: str = typer.Argument(
+        help="Input data for import, can be a file path or base64 string",
+    ),
+    base64: bool = typer.Option(
+        False,
+        "-b",
+        "--base64",
+        help="Indicates that the input is a base64 encoded string",
+    ),
+    password: Optional[str] = typer.Option(
+        None,
+        "-p",
+        "--password",
+        help="Password for decrypting the imported data",
+    ),
+):
+    """Import cligram data."""
+    from .tasks import transfer
+
+    try:
+        config: "Config" = ctx.obj["cligram.init:core"]()
+    except Exception:
+        from . import Config
+
+        config = Config()
+    cfg = config.temp["cligram.transfer:import"] = transfer._ImportConfig(
+        input_value=input,
+        is_data=base64,
+        password=password,
+    )
+
+    asyncio.run(transfer.import_early(cfg=cfg))
+    if cfg._need_exit:
+        raise typer.Exit()
+
+    app: "Application" = ctx.obj["cligram.init:app"]()
+    app.start(transfer.import_data)
 
 
 @app.command("info")

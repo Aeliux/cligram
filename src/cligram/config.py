@@ -464,7 +464,7 @@ class Config:
     exclusions: List[str] = field(default_factory=list)
     """List of usernames to exclude from processing"""
 
-    path: Path = field(default=Path("config.json"))
+    path: Path = field(default=GLOBAL_CONFIG_PATH)
     """Path to the configuration file"""
 
     updated: bool = False

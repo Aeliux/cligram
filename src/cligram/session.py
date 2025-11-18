@@ -20,9 +20,17 @@ def get_search_paths(config: Optional[Config] = None) -> List[Path]:
         Path.cwd(),
         Path.cwd() / "sessions",
         config.base_path,
-        config.data_path / "sessions",
-        Path.home() / ".cligram" / "sessions" / config.telegram.api.identifier,
+        get_config_session_path(config),
+        get_global_session_path(config),
     ]
+
+
+def get_config_session_path(config: "Config") -> Path:
+    return config.data_path / "sessions"
+
+
+def get_global_session_path(config: "Config") -> Path:
+    return Path.home() / ".cligram" / "sessions" / config.telegram.api.identifier
 
 
 class CustomSession(SQLiteSession):
