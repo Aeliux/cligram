@@ -109,7 +109,7 @@ def test_config_get_nested_value(config):
         config.get_nested_value("scan.messages.randomize")
         == config.scan.messages.randomize
     )
-    assert config.get_nested_value("interactive.mode") == config.interactive.mode
+    assert config.get_nested_value("interactive.mode") == config.interactive.mode.value
     assert (
         config.get_nested_value("telegram.connection.proxies")
         == config.telegram.connection.proxies
