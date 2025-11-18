@@ -388,9 +388,11 @@ class Archive:
         self._cipher: Optional[Fernet] = None
         self._salt = salt
         self._entries: Dict[str, ArchiveEntry] = {}  # In-memory storage
-        self._password = password
+        self._password = (
+            password if password else "password"
+        )  # To ensure data scrambling
 
-        if password:
+        if self._password:
             self._cipher = self._create_cipher()
 
     @classmethod
@@ -519,7 +521,9 @@ class Archive:
         # Decrypt if needed
         if self._cipher:
             loop = asyncio.get_event_loop()
-            data = await loop.run_in_executor(None, self._cipher.decrypt, data)
+            # Fernet expects base64, so encode it first
+            b64_data = await loop.run_in_executor(None, base64.urlsafe_b64encode, data)
+            data = await loop.run_in_executor(None, self._cipher.decrypt, b64_data)
 
         # Check size
         if len(data) > self.MAX_SIZE:
@@ -637,7 +641,9 @@ class Archive:
 
         # Encrypt if needed
         if self._cipher:
-            data = await loop.run_in_executor(None, self._cipher.encrypt, data)
+            encrypted = await loop.run_in_executor(None, self._cipher.encrypt, data)
+            # Fernet returns base64, decode it back to raw bytes
+            data = await loop.run_in_executor(None, base64.urlsafe_b64decode, encrypted)
 
         return data
 
