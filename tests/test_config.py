@@ -99,7 +99,10 @@ def test_config_get_nested_value(config):
     with pytest.raises(ValueError):
         config.get_nested_value("app.nonexistent")
 
-    assert config.get_nested_value("telegram.api.id") == config.telegram.api.id
+    assert (
+        config.get_nested_value("telegram.api.id", bypass_interceptor=True)
+        == config.telegram.api.id
+    )
     assert config.get_nested_value("app.verbose") == config.app.verbose
     assert config.get_nested_value("scan.limit") == config.scan.limit
     assert (
