@@ -70,6 +70,9 @@ class ArchiveEntry:
     _gname: str = ""
     """Group name of the entry (cached)."""
 
+    pax_headers: Dict[str, str] = field(default_factory=dict)
+    """PAX extended attributes/headers."""
+
     _content_hash_cache: Optional[bytes] = field(default=None, init=False)
     """Cached SHA-256 hash of content."""
 
@@ -163,6 +166,11 @@ class ArchiveEntry:
         else:
             file_type = FileType.FILE
 
+        # Extract PAX headers if available
+        pax_headers = {}
+        if hasattr(member, "pax_headers") and member.pax_headers:
+            pax_headers = dict(member.pax_headers)
+
         return cls(
             name=member.name,
             size=member.size,
@@ -174,6 +182,7 @@ class ArchiveEntry:
             gid=member.gid,
             _uname=member.uname,
             _gname=member.gname,
+            pax_headers=pax_headers,
         )
 
     @classmethod
@@ -227,6 +236,10 @@ class ArchiveEntry:
         info.uname = self.uname
         info.gname = self.gname
 
+        # Set PAX headers if available
+        if self.pax_headers:
+            info.pax_headers = self.pax_headers.copy()
+
         if self.file_type == FileType.DIRECTORY:
             info.type = tarfile.DIRTYPE
         elif self.file_type == FileType.SYMLINK:
@@ -253,6 +266,7 @@ class ArchiveEntry:
             "uname": self.uname,
             "gname": self.gname,
             "content_hash": self.content_hash.hex() if self.content_hash else None,
+            "pax_headers": self.pax_headers,
         }
 
     def __hash__(self) -> int:
@@ -264,6 +278,9 @@ class ArchiveEntry:
         Returns:
             Hash value
         """
+        # Convert pax_headers dict to tuple of sorted items for hashing
+        pax_tuple = tuple(sorted(self.pax_headers.items())) if self.pax_headers else ()
+
         return hash(
             (
                 self.name,
@@ -274,6 +291,7 @@ class ArchiveEntry:
                 int(self.mtime.timestamp()),  # Convert to int for consistency
                 self.uid,
                 self.gid,
+                pax_tuple,
             )
         )
 
@@ -305,6 +323,7 @@ class ArchiveEntry:
             and self.mtime == other.mtime
             and self.uid == other.uid
             and self.gid == other.gid
+            and self.pax_headers == other.pax_headers
         )
 
     def __repr__(self) -> str:
@@ -473,6 +492,10 @@ class Archive:
             return mode
         return f"{mode}:{self.compression.value}"
 
+    def _get_tar_format(self) -> int:
+        """Get tar format (PAX by default)."""
+        return tarfile.PAX_FORMAT
+
     def _check_size_limit(self, additional_size: int = 0) -> None:
         """Check if adding data would exceed size limit."""
         current_size = sum(entry.size for entry in self._entries.values())
@@ -545,7 +568,7 @@ class Archive:
         tar: tarfile.TarFile
 
         mode = self._get_tar_mode("w")
-        with tarfile.open(fileobj=buffer, mode=mode) as tar:  # type: ignore
+        with tarfile.open(fileobj=buffer, mode=mode, format=self._get_tar_format()) as tar:  # type: ignore
             for entry in self._entries.values():
                 tar_info = entry.to_tar_info()
 
@@ -688,13 +711,20 @@ class Archive:
 
         return entries
 
-    def add_bytes(self, name: str, data: bytes, mode: int = 0o644) -> ArchiveEntry:
+    def add_bytes(
+        self,
+        name: str,
+        data: bytes,
+        mode: int = 0o644,
+        pax_headers: Optional[Dict[str, str]] = None,
+    ) -> ArchiveEntry:
         """Add file from bytes to archive.
 
         Args:
             name: Name in archive
             data: File content
             mode: File mode (default: 0o644)
+            pax_headers: Optional PAX extended attributes
 
         Returns:
             Created ArchiveEntry
@@ -708,6 +738,7 @@ class Archive:
             mode=mode,
             mtime=datetime.now(),
             _content=data,
+            pax_headers=pax_headers or {},
         )
 
         self._entries[name] = entry
@@ -848,9 +879,33 @@ class Archive:
 
     def __hash__(self):
         """Hash of the archive based on its contents."""
-        return hash(tuple(sorted(self._entries.keys())))
+        # entries provide their hashes
+        return hash(frozenset(self._entries.items()))
 
-    def __aenter__(self):
+    def __eq__(self, other: object) -> bool:
+        """Check equality with another Archive.
+
+        Args:
+            other: Object to compare with
+
+        Returns:
+            True if archives are equal
+        """
+        if not isinstance(other, Archive):
+            return NotImplemented
+
+        # Fast path: check identity
+        if self is other:
+            return True
+
+        return (
+            self._entries == other._entries
+            and self.compression == other.compression
+            and self._password == other._password
+            and self._salt == other._salt
+        )
+
+    async def __aenter__(self):
         """Async context manager entry."""
         return self
 
