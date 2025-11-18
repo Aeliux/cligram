@@ -116,6 +116,11 @@ def export(
         "--no-config",
         help="Exclude the current configuration from the export",
     ),
+    export_dotenv: bool = typer.Option(
+        False,
+        "--export-dotenv",
+        help="Include the .env file in the export, only if environment variables are used for API credentials",
+    ),
     exported_sessions: List[str] = typer.Option(
         [],
         "--session",
@@ -150,6 +155,7 @@ def export(
     config: "Config" = ctx.obj["cligram.init:core"]()
     config.temp["cligram.transfer:export"] = transfer._ExportConfig(
         export_config=not no_config,
+        export_dotenv=export_dotenv or all_data,
         exported_sessions="*" if all_sessions or all_data else exported_sessions,
         exported_states="*" if all_states or all_data else exported_states,
         path=output,

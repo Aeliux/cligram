@@ -60,6 +60,11 @@ class ApiConfig:
         digest = hasher.digest()
         return base64.urlsafe_b64encode(digest).decode("utf-8")[:8]
 
+    @property
+    def valid(self) -> bool:
+        """Check if API credentials are valid."""
+        return self.id != 0 and self.hash != ""
+
     def __post_init__(self):
         self._load_from_env()
 

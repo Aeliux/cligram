@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -23,6 +24,7 @@ class _ExportConfig:
     """Configuration for export task."""
 
     export_config: bool = True
+    export_dotenv: bool = False
     exported_sessions: list[str] | str = field(default_factory=list)
     exported_states: list[str] | str = field(default_factory=list)
     export_type: _ExportType = _ExportType.BASE64
@@ -44,15 +46,27 @@ async def export(app: "Application"):
     interactive = cfg == _ExportConfig()
 
     sessions = CustomSession.list_sessions()
+    enable_dotenv = app.config.telegram.api.from_env and app.config.telegram.api.valid
 
     if interactive:
         app.status.stop()
         import questionary
 
         cfg.export_config = await questionary.confirm(
-            "Do you want to include the current configuration in the export?",
+            "Do you want to include the current configuration in the export?"
+            + (
+                " (including your api credentials)"
+                if not enable_dotenv and app.config.telegram.api.valid
+                else ""
+            ),
             default=True,
         ).ask_async()
+
+        if enable_dotenv:
+            cfg.export_dotenv = await questionary.confirm(
+                "Do you want to export sensitive data as .env file?",
+                default=False,
+            ).ask_async()
 
         session_choices = [Path(s).stem for s in sessions]
         if session_choices:
@@ -134,6 +148,28 @@ async def export(app: "Application"):
             archive.add_bytes(
                 name="config.json",
                 data=json.encode("utf-8"),
+                pax_headers=default_headers | header,
+            )
+            progress.update(task, advance=1)
+
+        if enable_dotenv and cfg.export_dotenv:
+            task = progress.add_task("Exporting .env file", total=2)
+
+            # Export relevant environment variables
+            env_vars = {"CLIGRAM_API_ID", "CLIGRAM_API_HASH"}
+            dotenv_content = ""
+            for var in env_vars:
+                value = os.getenv(var)
+                if value is not None:
+                    dotenv_content += f"{var}={value}\n"
+            progress.update(task, advance=1)
+
+            header = {
+                "cligram.transfer.type": "dotenv",
+            }
+            archive.add_bytes(
+                name=".env",
+                data=dotenv_content.encode("utf-8"),
                 pax_headers=default_headers | header,
             )
             progress.update(task, advance=1)
