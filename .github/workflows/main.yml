@@ -96,10 +96,8 @@ jobs:
           - os: windows-arm
             runs-on: windows-11-arm
           - os: macos-intel
-            # macos-15-intel is the last x86_64 runner
             runs-on: macos-15-intel
           - os: macos-arm
-            # macos-14+ (including latest) are ARM64 runners
             runs-on: macos-latest
           - os: android-intel
             runs-on: ubuntu-latest
@@ -108,12 +106,6 @@ jobs:
             runs-on: ubuntu-latest
             platform: android
             archs: arm64_v8a
-          - os: ios
-            runs-on: macos-latest
-            platform: ios
-          - os: pyodide
-            runs-on: ubuntu-latest
-            platform: pyodide
 
     steps:
       - name: Check out repository
