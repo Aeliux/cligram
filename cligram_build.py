@@ -14,12 +14,11 @@ from setuptools import Distribution, Extension, setup
 def build():
     # Determine platform-specific optimization flags
     if sys.platform == "win32":
-        extra_compile_args = ["/O2", "/GL", "/favor:blend"]
+        extra_compile_args = ["/GL", "/favor:blend"]
         extra_link_args = ["/LTCG"]
     else:
         # Unix-like systems (Linux, macOS, etc.)
         extra_compile_args = [
-            "-O3",
             "-march=native",
             "-ffast-math",
             "-funroll-loops",
