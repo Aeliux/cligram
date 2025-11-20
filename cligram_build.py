@@ -12,28 +12,10 @@ from setuptools import Distribution, Extension, setup
 
 
 def build():
-    # Determine platform-specific optimization flags
-    if sys.platform == "win32":
-        extra_compile_args = ["/GL", "/favor:blend"]
-        extra_link_args = ["/LTCG"]
-    else:
-        # Unix-like systems (Linux, macOS, etc.)
-        extra_compile_args = [
-            "-march=native",
-            "-ffast-math",
-            "-funroll-loops",
-            "-finline-functions",
-            "-DNDEBUG",
-        ]
-        extra_link_args = []
-
     ext_modules = [
         Extension(
             name="cligram.utils._device",
             sources=["src/cligram/utils/_device.c"],
-            include_dirs=[],
-            extra_compile_args=extra_compile_args,
-            extra_link_args=extra_link_args,
         )
     ]
 
