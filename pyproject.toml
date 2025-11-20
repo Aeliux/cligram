@@ -28,8 +28,7 @@ classifiers = [
     "Topic :: Internet",
     "Typing :: Typed",
 ]
-dynamic = []
-version = "0.3.3.post96.dev0+8e94ffd"
+dynamic = ["version"]
 
 [project.scripts]
 cligram = "cligram.cli:main"
@@ -76,6 +75,7 @@ docs = [
 
 
 [tool.poetry]
+version = "0.0.0"
 include = [
     { path = "src/cligram/**/*.so", format = "wheel" },
     { path = "src/cligram/**/*.pyd", format = "wheel" },
