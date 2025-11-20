@@ -10,7 +10,10 @@ Usage:
 """
 
 import sys
+import time
 from pathlib import Path
+
+from cligram.utils.device import get_device_info as get_device_info_python
 
 # Add src to path for development
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -40,72 +43,49 @@ def main():
     print("✅ Native extension is available!")
     print()
 
-    # Get device info
-    print("🔍 Detecting device information...")
-    try:
-        device = get_device_info()
-    except Exception as e:
-        print(f"❌ Error getting device info: {e}")
-        return 1
+    # Time Python implementation
+    start = time.perf_counter()
+    device_py = get_device_info_python(no_cache=True)
+    python_time = time.perf_counter() - start
+
+    # Time native implementation
+    start = time.perf_counter()
+    device_native = get_device_info(no_cache=True)
+    native_time = time.perf_counter() - start
 
     print()
-    print("📱 Device Information:")
+    print("📱 Device Information: (native/python)")
     print("-" * 70)
-    print(f"Platform:        {device.platform.value}")
-    print(f"Architecture:    {device.architecture.value}")
-    print(f"OS Name:         {device.name}")
-    print(f"OS Version:      {device.version}")
-    print(f"Device Model:    {device.model}")
-    print(f"Title:           {device.title}")
+    print(f"Platform:        {device_native.platform.value}/{device_py.platform.value}")
+    print(
+        f"Architecture:    {device_native.architecture.value}/{device_py.architecture.value}"
+    )
+    print(f"OS Name:         {device_native.name}/{device_py.name}")
+    print(f"OS Version:      {device_native.version}/{device_py.version}")
+    print(f"Device Model:    {device_native.model}/{device_py.model}")
+    print(f"Title:           {device_native.title}/{device_py.title}")
     print()
-    print(f"Environments:    {', '.join(e.value for e in device.environments)}")
-    print()
-    print(f"Is Virtual:      {'Yes' if device.is_virtual else 'No'}")
-    print(f"Is CI:           {'Yes' if device.is_ci else 'No'}")
+    print(
+        f"Environments:    {', '.join(e.value for e in device_native.environments)}/{', '.join(e.value for e in device_py.environments)}"
+    )
     print("-" * 70)
     print()
 
     # Compare with Python implementation
     print("⚖️  Comparing with pure Python implementation...")
-    try:
-        import time
 
-        from cligram.utils.device import get_device_info as get_device_info_python
+    print()
+    print("Performance Comparison:")
+    print(f"  Python: {python_time * 1000:.2f} ms")
+    print(f"  Native: {native_time * 1000:.2f} ms")
+    print(f"  Speedup: {python_time / native_time:.1f}x")
+    print()
 
-        # Time Python implementation
-        start = time.perf_counter()
-        device_py = get_device_info_python(no_cache=True)
-        python_time = time.perf_counter() - start
-
-        # Time native implementation
-        start = time.perf_counter()
-        device_native = get_device_info(no_cache=True)
-        native_time = time.perf_counter() - start
-
-        print()
-        print("Performance Comparison:")
-        print(f"  Python: {python_time * 1000:.2f} ms")
-        print(f"  Native: {native_time * 1000:.2f} ms")
-        print(f"  Speedup: {python_time / native_time:.1f}x")
-        print()
-
-        # Check consistency
-        if (
-            device_py.platform == device_native.platform
-            and device_py.architecture == device_native.architecture
-        ):
-            print("✅ Results are consistent between implementations")
-        else:
-            print("⚠️  Results differ between implementations:")
-            print(
-                f"  Platform: {device_py.platform.value} vs {device_native.platform.value}"
-            )
-            print(
-                f"  Architecture: {device_py.architecture.value} vs {device_native.architecture.value}"
-            )
-
-    except ImportError:
-        print("⚠️  Could not import Python implementation for comparison")
+    # Check consistency
+    if device_py == device_native:
+        print("✅ Results are consistent between implementations")
+    else:
+        print("⚠️  Results differ between implementations")
 
     print()
     print("=" * 70)
