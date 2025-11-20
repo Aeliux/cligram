@@ -75,7 +75,20 @@ docs = [
 
 
 [tool.poetry]
+include = [
+    { path = "src/cligram/**/*.so", format = "wheel" },
+    { path = "src/cligram/**/*.pyd", format = "wheel" },
+    { path = "src/cligram/**/*.c", format = "sdist" },
+]
+exclude = [
+    "src/cligram/**/*.c",
+    "src/cligram/**/*.h"
+]
 version = "0.0.0"
+
+[tool.poetry.build]
+script = "build.py"
+
 
 [tool.poetry.requires-plugins]
 poetry-dynamic-versioning = { version = ">=1.0.0,<2.0.0", extras = ["plugin"] }
@@ -109,8 +122,12 @@ initial-content = """
 """
 
 [build-system]
-requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]
-build-backend = "poetry_dynamic_versioning.backend"
+requires = [
+    "poetry-core>=1.0.0",
+    "poetry-dynamic-versioning>=1.0.0,<2.0.0",
+    "setuptools>=65.0.0",
+]
+build-backend = "poetry.core.masonry.api"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

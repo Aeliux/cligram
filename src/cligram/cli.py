@@ -215,12 +215,14 @@ def import_data(
 def info():
     """Display information about cligram and current environment."""
     from . import __version__
+    from .utils._device import get_device_info
 
     typer.echo(f"cligram version: {__version__}")
 
     # Benckmark it
     stime = datetime.datetime.now()
-    device_info = utils.get_device_info()
+    # device_info = utils.get_device_info()
+    device_info = get_device_info()
     etime = datetime.datetime.now()
     delta = etime - stime
     typer.echo(f"Device info fetched in: {delta.total_seconds():.3f} seconds")
