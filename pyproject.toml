@@ -87,7 +87,7 @@ exclude = [
 version = "0.0.0"
 
 [tool.poetry.build]
-script = "build.py"
+script = "cligram_build.py"
 
 
 [tool.poetry.requires-plugins]
