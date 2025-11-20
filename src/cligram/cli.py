@@ -10,7 +10,7 @@ import typer
 from click import ClickException
 from dotenv import load_dotenv
 
-from . import DEFAULT_PATH, commands, exceptions
+from . import DEFAULT_PATH, commands, exceptions, utils
 from .logger import setup_logger, setup_preinit_logger
 
 if TYPE_CHECKING:
@@ -215,14 +215,12 @@ def import_data(
 def info():
     """Display information about cligram and current environment."""
     from . import __version__
-    from .utils._device import get_device_info
 
     typer.echo(f"cligram version: {__version__}")
 
     # Benckmark it
     stime = datetime.datetime.now()
-    # device_info = utils.get_device_info()
-    device_info = get_device_info()
+    device_info = utils.get_device_info()
     etime = datetime.datetime.now()
     delta = etime - stime
     typer.echo(f"Device info fetched in: {delta.total_seconds():.3f} seconds")

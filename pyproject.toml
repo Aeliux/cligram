@@ -75,16 +75,17 @@ docs = [
 
 
 [tool.poetry]
-version = "0.0.0"
 include = [
     { path = "src/cligram/**/*.so", format = "wheel" },
     { path = "src/cligram/**/*.pyd", format = "wheel" },
     { path = "src/cligram/**/*.c", format = "sdist" },
+    { path = "src/cligram/**/*.h", format = "sdist" },
+    { path = "src/cligram/**/*.h", format = "wheel" },
 ]
 exclude = [
-    "src/cligram/**/*.c",
-    "src/cligram/**/*.h"
+    "src/cligram/**/*.c"
 ]
+version = "0.0.0"
 
 [tool.poetry.build]
 script = "cligram_build.py"

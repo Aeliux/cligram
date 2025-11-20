@@ -5,6 +5,13 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Callable
 
+try:
+    from cligram.utils._device import get_device_info as _native_get_device_info
+
+    _NATIVE_AVAILABLE = True
+except ImportError:
+    _NATIVE_AVAILABLE = False
+
 _device_cache: "DeviceInfo | None" = None
 
 
@@ -62,6 +69,22 @@ class DeviceInfo:
         """Check if running in a CI environment."""
         ci_envs = {Environment.ACTIONS, Environment.CODESPACES}
         return any(env in ci_envs for env in self.environments)
+
+    def __post_init__(self):
+        invalid_models = {
+            "",
+            "unknown",
+            "virtual machine",
+            "none",
+            "to be filled by o.e.m.",
+            "default string",
+            "system product name",
+        }
+
+        if not self.model or self.model.strip().lower() in invalid_models:
+            if Environment.VIRTUAL_MACHINE not in self.environments:
+                self.environments.append(Environment.VIRTUAL_MACHINE)
+            self.model = platform.node()
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, DeviceInfo):
@@ -326,6 +349,57 @@ class MacOSDetector:
         return _run_command(["sysctl", "-n", "hw.model"])
 
 
+def _parse_native_result(result: dict) -> DeviceInfo:
+    """Convert native C extension result to DeviceInfo object.
+
+    Args:
+        result: Dictionary returned from C extension with keys:
+            platform, architecture, name, version, model, environments
+
+    Returns:
+        DeviceInfo object with all fields populated.
+    """
+    # Map string values to enum types
+    platform_map = {
+        "Windows": Platform.WINDOWS,
+        "Linux": Platform.LINUX,
+        "Android": Platform.ANDROID,
+        "macOS": Platform.MACOS,
+        "Unknown": Platform.UNKNOWN,
+    }
+
+    arch_map = {
+        "x64": Architecture.X64,
+        "x86": Architecture.X86,
+        "arm64": Architecture.ARM64,
+        "arm": Architecture.ARM,
+        "unknown": Architecture.UNKNOWN,
+    }
+
+    env_map = {
+        "Local": Environment.LOCAL,
+        "Docker": Environment.DOCKER,
+        "GitHub Actions": Environment.ACTIONS,
+        "Github Codespaces": Environment.CODESPACES,
+        "Virtual Machine": Environment.VIRTUAL_MACHINE,
+        "WSL": Environment.WSL,
+        "Termux": Environment.TERMUX,
+    }
+
+    platform = platform_map.get(result["platform"], Platform.UNKNOWN)
+    architecture = arch_map.get(result["architecture"], Architecture.UNKNOWN)
+    environments = [env_map.get(e, Environment.LOCAL) for e in result["environments"]]
+
+    return DeviceInfo(
+        platform=platform,
+        architecture=architecture,
+        name=result["name"],
+        version=result["version"],
+        model=result["model"],
+        environments=environments,
+    )
+
+
 def get_device_info(no_cache=False) -> DeviceInfo:
     """Get comprehensive device information across all supported platforms.
 
@@ -336,39 +410,44 @@ def get_device_info(no_cache=False) -> DeviceInfo:
     if not no_cache and isinstance(_device_cache, DeviceInfo):
         return _device_cache
 
-    system = platform.system()
-    architecture = get_architecture()
-    environments = _detect_environments()
+    if _NATIVE_AVAILABLE:
+        # Call native C extension
+        result = _native_get_device_info()  # type: ignore
 
-    # Platform-specific detection
-    if system == "Windows":
-        plat, name, version, model = WindowsDetector.detect()
-    elif system == "Linux":
-        if AndroidDetector.is_android():
+        # Convert to DeviceInfo object
+        device = _parse_native_result(result)
+    else:
+        # Fallback to pure Python detection
+        system = platform.system()
+        architecture = get_architecture()
+        environments = _detect_environments()
+
+        # Platform-specific detection
+        if system == "Windows":
+            plat, name, version, model = WindowsDetector.detect()
+        elif system == "Linux":
+            if AndroidDetector.is_android():
+                plat, name, version, model = AndroidDetector.detect()
+            else:
+                plat, name, version, model = LinuxDetector.detect()
+        elif system == "Darwin":
+            plat, name, version, model = MacOSDetector.detect()
+        elif system == "Android":
             plat, name, version, model = AndroidDetector.detect()
         else:
-            plat, name, version, model = LinuxDetector.detect()
-    elif system == "Darwin":
-        plat, name, version, model = MacOSDetector.detect()
-    elif system == "Android":
-        plat, name, version, model = AndroidDetector.detect()
-    else:
-        plat = Platform.UNKNOWN
-        name = system
-        version = platform.release()
-        model = platform.node()
+            plat = Platform.UNKNOWN
+            name = system
+            version = platform.release()
+            model = platform.node()
 
-    # Validate and fallback for model
-    model = _validate_model(model, environments)
-
-    device = DeviceInfo(
-        platform=plat,
-        architecture=architecture,
-        name=name,
-        version=version,
-        model=model,
-        environments=environments,
-    )
+        device = DeviceInfo(
+            platform=plat,
+            architecture=architecture,
+            name=name,
+            version=version,
+            model=model,
+            environments=environments,
+        )
 
     if not no_cache:
         _device_cache = device
@@ -421,23 +500,3 @@ def _detect_environments() -> list[Environment]:
             continue
 
     return environments if environments else [Environment.LOCAL]
-
-
-def _validate_model(model: str, environments: list[Environment]) -> str:
-    """Validate and clean up model name."""
-    invalid_models = {
-        "",
-        "unknown",
-        "virtual machine",
-        "none",
-        "to be filled by o.e.m.",
-        "default string",
-        "system product name",
-    }
-
-    if not model or model.strip().lower() in invalid_models:
-        if Environment.VIRTUAL_MACHINE not in environments:
-            environments.append(Environment.VIRTUAL_MACHINE)
-        return platform.node()
-
-    return model

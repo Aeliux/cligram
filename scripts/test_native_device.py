@@ -13,10 +13,11 @@ import sys
 import time
 from pathlib import Path
 
-from cligram.utils.device import get_device_info as get_device_info_python
-
 # Add src to path for development
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
+from cligram.utils import _device, device
+from cligram.utils.device import _NATIVE_AVAILABLE, get_device_info
 
 
 def main():
@@ -25,33 +26,30 @@ def main():
     print("=" * 70)
     print()
 
-    # Check if native extension is available
-    try:
-        from cligram.utils._device import get_device_info, is_available
-    except ImportError as e:
-        print(f"❌ Failed to import native module: {e}")
-        print("\nMake sure to build the extension first:")
-        print("  python scripts/build_native.py --inplace")
-        return 1
-
-    if not is_available():
+    if not _NATIVE_AVAILABLE:
         print("❌ Native extension not available!")
-        print("\nBuild it first:")
-        print("  python scripts/build_native.py --inplace")
+        print("\nBuild it first")
         return 1
 
     print("✅ Native extension is available!")
     print()
 
     # Time Python implementation
+    device._NATIVE_AVAILABLE = False  # Force using Python implementation
     start = time.perf_counter()
-    device_py = get_device_info_python(no_cache=True)
+    device_py = get_device_info(no_cache=True)
     python_time = time.perf_counter() - start
 
     # Time native implementation
+    device._NATIVE_AVAILABLE = True  # Force using native implementation
     start = time.perf_counter()
     device_native = get_device_info(no_cache=True)
     native_time = time.perf_counter() - start
+
+    # Time raw native implementation
+    start = time.perf_counter()
+    _ = _device.get_device_info()
+    raw_native_time = time.perf_counter() - start
 
     print()
     print("📱 Device Information: (native/python)")
@@ -79,6 +77,7 @@ def main():
     print(f"  Python: {python_time * 1000:.2f} ms")
     print(f"  Native: {native_time * 1000:.2f} ms")
     print(f"  Speedup: {python_time / native_time:.1f}x")
+    print(f"  Raw Native: {raw_native_time * 1000:.2f} ms")
     print()
 
     # Check consistency

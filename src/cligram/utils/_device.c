@@ -490,20 +490,33 @@ static PyObject* native_get_device_info(PyObject* self, PyObject* args) {
 /* Module method definitions */
 static PyMethodDef DeviceNativeMethods[] = {
     {"get_device_info", native_get_device_info, METH_NOARGS,
-     "Get device information using native APIs (returns dict)"},
+     "get_device_info() -> dict\n\n"
+     "Get comprehensive device information using native APIs.\n\n"
+     "Returns:\n"
+     "    dict: A dictionary containing device information with the following keys:\n"
+     "        - platform (str): Operating system platform (Windows, Linux, macOS, Android)\n"
+     "        - architecture (str): CPU architecture (x64, x86, arm64, arm)\n"
+     "        - name (str): Operating system name or distribution name\n"
+     "        - version (str): Operating system version\n"
+     "        - model (str): Device model or computer name\n"},
     {NULL, NULL, 0, NULL}
 };
 
 /* Module definition */
 static struct PyModuleDef devicenativemodule = {
     PyModuleDef_HEAD_INIT,
-    "_device_native",
-    "Native device detection module for high-performance platform detection",
+    "_device",
+    "Native device detection module for high-performance platform detection.\n\n"
+    "This module provides native C implementations for detecting device and system\n"
+    "information across Windows, Linux, macOS, and Android platforms. It uses\n"
+    "platform-specific APIs for accurate and fast detection.\n\n"
+    "Functions:\n"
+    "    get_device_info() -> dict: Get comprehensive device information",
     -1,
     DeviceNativeMethods
 };
 
 /* Module initialization */
-PyMODINIT_FUNC PyInit__device_native(void) {
+PyMODINIT_FUNC PyInit__device(void) {
     return PyModule_Create(&devicenativemodule);
 }

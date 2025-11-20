@@ -30,8 +30,8 @@ def build():
 
     ext_modules = [
         Extension(
-            name="cligram.utils._device_native",
-            sources=["src/cligram/utils/_device_native.c"],
+            name="cligram.utils._device",
+            sources=["src/cligram/utils/_device.c"],
             include_dirs=[],
             extra_compile_args=extra_compile_args,
             extra_link_args=extra_link_args,
