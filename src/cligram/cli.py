@@ -10,7 +10,7 @@ import typer
 from click import ClickException
 from dotenv import load_dotenv
 
-from . import DEFAULT_PATH, commands, exceptions, utils
+from . import DEFAULT_PATH, commands, exceptions
 from .logger import setup_logger, setup_preinit_logger
 
 if TYPE_CHECKING:
