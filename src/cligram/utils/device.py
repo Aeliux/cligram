@@ -320,6 +320,8 @@ def get_device_info(no_cache=False) -> DeviceInfo:
             plat, name, version, model = LinuxDetector.detect()
     elif system == "Darwin":
         plat, name, version, model = MacOSDetector.detect()
+    elif system == "Android":
+        plat, name, version, model = AndroidDetector.detect()
     else:
         plat = Platform.UNKNOWN
         name = system
