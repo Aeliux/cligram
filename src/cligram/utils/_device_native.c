@@ -153,23 +153,64 @@ static PyObject* environments_to_list(int env_flags) {
 }
 
 #ifdef PLATFORM_WINDOWS
+/* RtlGetVersion for accurate Windows version detection */
+typedef LONG (WINAPI* RtlGetVersionPtr)(PRTL_OSVERSIONINFOW);
+
+/* Map Windows NT version to marketing version */
+static void get_windows_marketing_version(DWORD major, DWORD minor, DWORD build, char* version) {
+    if (major == 10) {
+        if (build >= 22000) {
+            strcpy(version, "11");
+        } else {
+            strcpy(version, "10");
+        }
+    } else if (major == 6) {
+        if (minor == 3) {
+            strcpy(version, "8.1");
+        } else if (minor == 2) {
+            strcpy(version, "8");
+        } else if (minor == 1) {
+            strcpy(version, "7");
+        } else if (minor == 0) {
+            strcpy(version, "Vista");
+        }
+    } else if (major == 5) {
+        if (minor == 1) {
+            strcpy(version, "XP");
+        } else if (minor == 0) {
+            strcpy(version, "2000");
+        }
+    } else {
+        /* Unknown version, show NT version */
+        snprintf(version, MAX_BUFFER, "NT %lu.%lu", major, minor);
+    }
+}
+
 /* Windows-specific detection */
 static int get_windows_info(char* name, char* version, char* model) {
     strcpy(name, "Windows");
 
-    /* Get Windows version */
-    OSVERSIONINFOEXW osvi;
-    ZeroMemory(&osvi, sizeof(OSVERSIONINFOEXW));
-    osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEXW);
+    /* Get accurate Windows version using RtlGetVersion */
+    HMODULE ntdll = GetModuleHandleA("ntdll.dll");
+    if (ntdll) {
+        RtlGetVersionPtr RtlGetVersion = (RtlGetVersionPtr)GetProcAddress(ntdll, "RtlGetVersion");
+        if (RtlGetVersion) {
+            RTL_OSVERSIONINFOW osvi;
+            ZeroMemory(&osvi, sizeof(RTL_OSVERSIONINFOW));
+            osvi.dwOSVersionInfoSize = sizeof(RTL_OSVERSIONINFOW);
 
-    #pragma warning(push)
-    #pragma warning(disable: 4996) /* Disable deprecation warning for GetVersionEx */
-    if (GetVersionExW((OSVERSIONINFOW*)&osvi)) {
-        snprintf(version, MAX_BUFFER, "%lu.%lu", osvi.dwMajorVersion, osvi.dwMinorVersion);
+            if (RtlGetVersion(&osvi) == 0) {
+                get_windows_marketing_version(osvi.dwMajorVersion, osvi.dwMinorVersion,
+                                             osvi.dwBuildNumber, version);
+            } else {
+                strcpy(version, "Unknown");
+            }
+        } else {
+            strcpy(version, "Unknown");
+        }
     } else {
         strcpy(version, "Unknown");
     }
-    #pragma warning(pop)
 
     /* Get system model from registry */
     HKEY hKey;
@@ -359,7 +400,7 @@ static int get_macos_info(char* name, char* version, char* model) {
 
     /* Get Mac model */
     char hw_model[MAX_BUFFER];
-    size = sizeof(hw_model);
+    size_t size = sizeof(hw_model);
 
     if (sysctlbyname("hw.model", hw_model, &size, NULL, 0) == 0) {
         strncpy(model, hw_model, MAX_BUFFER - 1);
