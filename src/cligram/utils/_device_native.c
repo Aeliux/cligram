@@ -6,6 +6,8 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <string.h>
+#include <stdio.h>
+#include <ctype.h>
 
 /* Compile-time platform detection */
 #if defined(_WIN32) || defined(_WIN64)
@@ -160,30 +162,31 @@ typedef LONG (WINAPI* RtlGetVersionPtr)(PRTL_OSVERSIONINFOW);
 static void get_windows_marketing_version(DWORD major, DWORD minor, DWORD build, char* version) {
     if (major == 10) {
         if (build >= 22000) {
-            strcpy(version, "11");
+            strncpy(version, "11", MAX_BUFFER - 1);
         } else {
-            strcpy(version, "10");
+            strncpy(version, "10", MAX_BUFFER - 1);
         }
     } else if (major == 6) {
         if (minor == 3) {
-            strcpy(version, "8.1");
+            strncpy(version, "8.1", MAX_BUFFER - 1);
         } else if (minor == 2) {
-            strcpy(version, "8");
+            strncpy(version, "8", MAX_BUFFER - 1);
         } else if (minor == 1) {
-            strcpy(version, "7");
+            strncpy(version, "7", MAX_BUFFER - 1);
         } else if (minor == 0) {
-            strcpy(version, "Vista");
+            strncpy(version, "Vista", MAX_BUFFER - 1);
         }
     } else if (major == 5) {
         if (minor == 1) {
-            strcpy(version, "XP");
+            strncpy(version, "XP", MAX_BUFFER - 1);
         } else if (minor == 0) {
-            strcpy(version, "2000");
+            strncpy(version, "2000", MAX_BUFFER - 1);
         }
     } else {
         /* Unknown version, show NT version */
         snprintf(version, MAX_BUFFER, "NT %lu.%lu", major, minor);
     }
+    version[MAX_BUFFER - 1] = '\0';
 }
 
 /* Windows-specific detection */
@@ -400,9 +403,9 @@ static int get_macos_info(char* name, char* version, char* model) {
 
     /* Get Mac model */
     char hw_model[MAX_BUFFER];
-    size_t size = sizeof(hw_model);
+    size_t model_size = sizeof(hw_model);
 
-    if (sysctlbyname("hw.model", hw_model, &size, NULL, 0) == 0) {
+    if (sysctlbyname("hw.model", hw_model, &model_size, NULL, 0) == 0) {
         strncpy(model, hw_model, MAX_BUFFER - 1);
     } else if (gethostname(model, MAX_BUFFER) != 0) {
         strcpy(model, "Unknown");
