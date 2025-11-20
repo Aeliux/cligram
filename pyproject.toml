@@ -28,7 +28,8 @@ classifiers = [
     "Topic :: Internet",
     "Typing :: Typed",
 ]
-dynamic = ["version"]
+dynamic = []
+version = "0.3.3.post96.dev0+8e94ffd"
 
 [project.scripts]
 cligram = "cligram.cli:main"
@@ -84,7 +85,6 @@ exclude = [
     "src/cligram/**/*.c",
     "src/cligram/**/*.h"
 ]
-version = "0.0.0"
 
 [tool.poetry.build]
 script = "cligram_build.py"
@@ -95,7 +95,7 @@ poetry-dynamic-versioning = { version = ">=1.0.0,<2.0.0", extras = ["plugin"] }
 
 
 [tool.poetry-dynamic-versioning]
-enable = true
+enable = false
 vcs = "git"
 metadata = true
 tagged-metadata = true
@@ -127,7 +127,7 @@ requires = [
     "poetry-dynamic-versioning>=1.0.0,<2.0.0",
     "setuptools>=65.0.0",
 ]
-build-backend = "poetry.core.masonry.api"
+build-backend = "poetry_dynamic_versioning.backend"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
