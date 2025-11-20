@@ -63,6 +63,36 @@ class DeviceInfo:
         ci_envs = {Environment.ACTIONS, Environment.CODESPACES}
         return any(env in ci_envs for env in self.environments)
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, DeviceInfo):
+            return NotImplemented
+        return (
+            self.platform == other.platform
+            and self.architecture == other.architecture
+            and self.name == other.name
+            and self.version == other.version
+            and self.model == other.model
+            and set(self.environments) == set(other.environments)
+        )
+
+    def __ne__(self, other: object) -> bool:
+        equal = self.__eq__(other)
+        if equal is NotImplemented:
+            return NotImplemented
+        return not equal
+
+    def __hash__(self) -> int:
+        return hash(
+            (
+                self.platform,
+                self.architecture,
+                self.name,
+                self.version,
+                self.model,
+                frozenset(self.environments),
+            )
+        )
+
 
 def _read_file_safe(filepath: str, strip_null: bool = False) -> str | None:
     """Safely read a file and return its content."""
