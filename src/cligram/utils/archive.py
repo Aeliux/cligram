@@ -283,7 +283,7 @@ class ArchiveEntry:
         """Compute hash for use in sets and dicts.
 
         Uses cached content hash for performance. Does not include
-        uname/gname as they can vary by system.
+        uname/gname or mtime as they can vary by system/creation time.
 
         Returns:
             Hash value
@@ -298,7 +298,7 @@ class ArchiveEntry:
                 self.file_type,
                 self._content_hash_cache,  # Use cached hash
                 self.mode,
-                int(self.mtime.timestamp()),  # Convert to int for consistency
+                # mtime excluded from hash
                 self.uid,
                 self.gid,
                 pax_tuple,
@@ -309,7 +309,7 @@ class ArchiveEntry:
         """Check equality with another ArchiveEntry.
 
         Uses cached content hash for performance. Does not compare
-        uname/gname as they can vary by system.
+        uname/gname or mtime as they can vary by system/creation time.
 
         Args:
             other: Object to compare with
@@ -330,7 +330,7 @@ class ArchiveEntry:
             and self.file_type == other.file_type
             and self._content_hash_cache == other._content_hash_cache  # Cached
             and self.mode == other.mode
-            and self.mtime == other.mtime
+            # mtime excluded from comparison
             and self.uid == other.uid
             and self.gid == other.gid
             and self.pax_headers == other.pax_headers
@@ -523,24 +523,30 @@ class Archive:
     async def _load_from_bytes(self, data: bytes) -> None:
         """Load archive from bytes."""
         # Decrypt if needed
-        if self._cipher:
+        if self._password:
             try:
                 loop = asyncio.get_event_loop()
-                # Fernet expects base64, so encode it first
-                b64_data = await loop.run_in_executor(
-                    None, base64.urlsafe_b64encode, data
+                # Extract salt from the first 16 bytes
+                if len(data) < 16:
+                    raise exceptions.InvalidArchiveError(
+                        "Encrypted data is too short to contain salt."
+                    )
+                stored_salt = data[:16]
+                encrypted_data = data[16:]
+
+                # Use the stored salt to recreate the cipher
+                self._salt = stored_salt
+                self._cipher = self._create_cipher()
+
+                # Fernet expects base64 encoded bytes
+                encrypted_data = base64.urlsafe_b64encode(encrypted_data)
+                data = await loop.run_in_executor(
+                    None, self._cipher.decrypt, encrypted_data
                 )
-                data = await loop.run_in_executor(None, self._cipher.decrypt, b64_data)
             except InvalidToken:
                 raise exceptions.InvalidPasswordError(
                     "Incorrect password for archive decryption."
                 )
-
-        # Check size
-        if len(data) > self.MAX_SIZE:
-            raise exceptions.SizeLimitExceededError(
-                f"Archive size {len(data) / (1024*1024):.1f} MB exceeds {self.MAX_SIZE / (1024*1024):.1f} MB limit"
-            )
 
         # Parse tar archive
         loop = asyncio.get_event_loop()
@@ -549,6 +555,13 @@ class Archive:
             self._parse_tar_to_entries,
             data,
         )
+
+        # Check size after parsing (uncompressed content size)
+        total_size = sum(entry.size for entry in self._entries.values())
+        if total_size > self.MAX_SIZE:
+            raise exceptions.SizeLimitExceededError(
+                f"Archive content size {total_size / (1024*1024):.1f} MB exceeds {self.MAX_SIZE / (1024*1024):.1f} MB limit"
+            )
 
     def _parse_tar_to_entries(self, data: bytes) -> Dict[str, ArchiveEntry]:
         """Parse tar archive to entries."""
@@ -639,9 +652,13 @@ class Archive:
 
         # Encrypt if needed
         if self._cipher:
+            # Fernet returns encrypted bytes (base64 encoded)
             encrypted = await loop.run_in_executor(None, self._cipher.encrypt, data)
-            # Fernet returns base64, decode it back to raw bytes
-            data = await loop.run_in_executor(None, base64.urlsafe_b64decode, encrypted)
+            encrypted = base64.urlsafe_b64decode(encrypted)
+            # Prepend salt to encrypted data
+            if self._salt is None:
+                raise ValueError("Salt must be set for encryption.")
+            data = self._salt + encrypted
 
         return data
 
@@ -907,7 +924,8 @@ class Archive:
     def __hash__(self):
         """Hash of the archive based on its contents."""
         # entries provide their hashes
-        return hash(frozenset(self._entries.items()))
+        # Include compression in hash
+        return hash((frozenset(self._entries.items()), self.compression))
 
     def __eq__(self, other: object) -> bool:
         """Check equality with another Archive.
@@ -925,12 +943,10 @@ class Archive:
         if self is other:
             return True
 
-        return (
-            self._entries == other._entries
-            and self.compression == other.compression
-            and self._password == other._password
-            and self._salt == other._salt
-        )
+        # Compare entries and compression
+        # Note: We don't compare password/salt for default instances
+        # since salt is randomly generated
+        return self._entries == other._entries and self.compression == other.compression
 
     async def __aenter__(self):
         """Async context manager entry."""
