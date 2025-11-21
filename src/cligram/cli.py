@@ -218,12 +218,7 @@ def info():
 
     typer.echo(f"cligram version: {__version__}")
 
-    # Benckmark it
-    stime = datetime.datetime.now()
     device_info = utils.get_device_info()
-    etime = datetime.datetime.now()
-    delta = etime - stime
-    typer.echo(f"Device info fetched in: {delta.total_seconds():.3f} seconds")
 
     typer.echo(f"Platform: {device_info.platform.value}")
     typer.echo(f"Architecture: {device_info.architecture.value}")
