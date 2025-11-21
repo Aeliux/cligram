@@ -5,34 +5,17 @@ import logging
 import platform
 import signal
 import sys
-from typing import TYPE_CHECKING, Callable, Coroutine, Optional
+from typing import TYPE_CHECKING, Callable, Coroutine
 
 from rich import get_console
 from rich.status import Status
 
-from . import StateManager, exceptions, utils
+from . import StateManager, utils
 
 if TYPE_CHECKING:
     from . import Config
 
 logger: logging.Logger = logging.getLogger(__name__)
-app_instance: Optional["Application"] = None
-_recv_signals: int = 0
-
-
-def get_app() -> "Application":
-    """Retrieve the global running application instance.
-
-    Returns:
-        Application: The global application instance
-
-    Raises:
-        ApplicationNotRunningError: If there is no running application
-    """
-    global app_instance
-    if app_instance is None:
-        raise exceptions.ApplicationNotRunningError("There is no running application")
-    return app_instance
 
 
 class Application:
@@ -61,7 +44,31 @@ class Application:
         self.status: Status = Status("", console=self.console, spinner="dots")
         """Rich status indicator for CLI feedback."""
 
-    async def _shutdown(self, sig=None):
+        self._recv_signals: int = 0
+        """Count of received shutdown signals."""
+
+        self._shutdown_callbacks: list[Callable[["Application"], None]] = []
+        """Callbacks to execute on shutdown."""
+
+    def add_shutdown_callback(self, callback: Callable[["Application"], None]) -> None:
+        """Register a callback to be called on application shutdown.
+
+        Args:
+            callback: A callable that takes the application instance as an argument.
+        """
+        self._shutdown_callbacks.append(callback)
+
+    def _run_shutdown_callbacks(self) -> None:
+        """Execute all registered shutdown callbacks."""
+        for callback in self._shutdown_callbacks:
+            try:
+                callback(self)
+            except Exception as e:
+                logger.error(
+                    f"Error in shutdown callback {callback}: {e}", exc_info=True
+                )
+
+    def _shutdown(self, sig=None, frame=None) -> None:
         """Handle graceful application shutdown.
 
         Args:
@@ -73,42 +80,49 @@ class Application:
         global _recv_signals
 
         if sig:
-            _recv_signals += 1
-            if _recv_signals >= 3:
+            self._recv_signals += 1
+            if self._recv_signals >= 3:
                 sys.exit(255)
-            logger.warning(f"Received exit signal {sig}, count: {_recv_signals}")
+            logger.warning(f"Received exit signal {sig}, count: {self._recv_signals}")
             self.console.print(f"[bold red]Received exit signal {sig}[/bold red]")
         if not self.shutdown_event.is_set():
             self.shutdown_event.set()
 
-    async def _setup_signal_handlers(self):
+    def _setup_signal_handlers(self):
         """Configure OS signal handlers.
 
         Handles:
         - SIGTERM for graceful termination
         - SIGINT for keyboard interrupts
-        - Platform-specific signal routing
-        - Async signal handling
         """
         if platform.system() == "Windows":
             try:
-                signal.signal(
-                    signal.SIGINT, lambda s, f: asyncio.create_task(self._shutdown(s))
-                )
-                signal.signal(
-                    signal.SIGTERM, lambda s, f: asyncio.create_task(self._shutdown(s))
-                )
+                signal.signal(signal.SIGINT, self._shutdown)
+                signal.signal(signal.SIGTERM, self._shutdown)
             except (AttributeError, NotImplementedError):
                 logger.warning("Signal handlers not fully supported on Windows")
         else:
             for sig in (signal.SIGTERM, signal.SIGINT):
                 try:
-                    asyncio.get_event_loop().add_signal_handler(
-                        sig,
-                        lambda s=sig: asyncio.create_task(self._shutdown(s)),  # type: ignore
-                    )
+                    asyncio.get_event_loop().add_signal_handler(sig, self._shutdown)
                 except NotImplementedError:
                     logger.warning(f"Failed to set handler for signal {sig}")
+
+    def _cleanup_signal_handlers(self):
+        """Remove signal handlers and restore defaults."""
+        if platform.system() == "Windows":
+            try:
+                signal.signal(signal.SIGINT, signal.SIG_DFL)
+                signal.signal(signal.SIGTERM, signal.SIG_DFL)
+            except (AttributeError, NotImplementedError):
+                pass
+        else:
+            loop = asyncio.get_event_loop()
+            for sig in (signal.SIGTERM, signal.SIGINT):
+                try:
+                    loop.remove_signal_handler(sig)
+                except (NotImplementedError, ValueError):
+                    pass
 
     def check_shutdown(self):
         """Check if shutdown has been requested.
@@ -145,27 +159,28 @@ class Application:
             finally:
                 self.status.update(cur_status)
 
-    async def _run(self, task: Callable[["Application"], Coroutine]):
+    async def _run(
+        self, task: Callable[["Application"], Coroutine] | Coroutine
+    ) -> None:
         """Executed by start() to run the main application task."""
         from . import __version__
 
-        if not asyncio.iscoroutinefunction(task):
-            raise TypeError("The provided task must be an async function")
+        if asyncio.iscoroutine(task):
+            coro = task
+        elif asyncio.iscoroutinefunction(task):
+            coro = task(self)
+        else:
+            raise TypeError("Task must be a coroutine or async callable")
 
-        global app_instance
-        if app_instance is not None:
-            raise exceptions.ApplicationAlreadyRunningError(
-                "An application is already running"
-            )
-        app_instance = self
+        utils.core._set_running_application(self)
 
         self.status.update("Starting application...")
         self.status.start()
 
         text = f"cligram v{__version__}"
-        if self.device.platform == utils.Platform.UNKNOWN:
+        if self.device.platform == utils.device.Platform.UNKNOWN:
             text += " on an unknown thing"
-        elif self.device.platform == utils.Platform.ANDROID:
+        elif self.device.platform == utils.device.Platform.ANDROID:
             text += " on Android!"
         self.console.print(f"[bold green]{text}[/bold green]")
         logger.info(
@@ -174,7 +189,7 @@ class Application:
 
         self.status.update("Initializing...")
         # Setup platform-specific signal handlers
-        await self._setup_signal_handlers()
+        self._setup_signal_handlers()
 
         logger.debug(f"Loaded configuration: {self.config.path}")
 
@@ -187,17 +202,19 @@ class Application:
 
         try:
             self.status.update("Running task...")
-            await task(self)
+            await coro
             logger.info("Execution completed successfully")
         finally:
+            logger.info("Shutting down application")
             self.status.update("Shutting down...")
             await self.state.save()
             self.state.backup()
-            logger.info("Application shutdown completed")
             self.status.stop()
-            app_instance = None
+            self._run_shutdown_callbacks()
+            self._cleanup_signal_handlers()
+            logger.info("Application shutdown completed")
 
-    def start(self, task: Callable[["Application"], Coroutine]):
+    def start(self, task: Callable[["Application"], Coroutine] | Coroutine) -> None:
         """Initialize application and run the main task in the event loop.
 
         Initializes signal handlers, loads state, and executes the provided task.
@@ -205,11 +222,11 @@ class Application:
         Raised exceptions are logged and re-raised.
 
         Args:
-            task (Callable): Async function representing the main task to run
+            task: Either an async function that accepts Application, or a coroutine
 
         Raises:
             ApplicationAlreadyRunningError: If an application is already running
-            TypeError: If the provided task is not an async function
+            TypeError: If the provided task is not awaitable
         """
         try:
             asyncio.run(self._run(task))
