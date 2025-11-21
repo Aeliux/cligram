@@ -212,12 +212,12 @@ def test_state_manager_register():
         StateManager.register("invalid2", DummyState())  # type: ignore
 
 
-def test_state_manager_get():
+def test_state_manager_get(state_dir):
     """Test getting states from manager."""
     StateManager.register("dummy", DummyState)
     StateManager.register("another", DummyState2)
 
-    manager = StateManager("test_data")
+    manager = StateManager(state_dir)
 
     # Get without type checking
     state1 = manager.get("dummy")

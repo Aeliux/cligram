@@ -28,6 +28,8 @@
         "**/coverage.xml": true,
         "htmlcov": true,
         "dist": true,
+        "build": true,
+        ".poetry": true
     },
     "files.watcherExclude": {
         "**/__pycache__/**": true,
