@@ -343,24 +343,24 @@ async def import_early(cfg: _ImportConfig):
     status.stop()
 
     if config_entry is not None:
-        consent = questionary.confirm(
+        consent = await questionary.confirm(
             "An exported configuration was found in the archive. Do you want to import it?",
             default=True,
-        ).ask()
+        ).ask_async()
 
         if consent:
-            config_path = questionary.path(
+            config_path = await questionary.path(
                 "Enter the path to save the imported configuration file:",
                 default=config_path,
-            ).ask()
+            ).ask_async()
         else:
             config_entry = None
 
     if dotenv_entry is not None:
-        consent = questionary.confirm(
+        consent = await questionary.confirm(
             "An exported .env file was found in the archive. Do you want to import it?",
             default=False,
-        ).ask()
+        ).ask_async()
 
         if not consent:
             dotenv_entry = None
