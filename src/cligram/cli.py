@@ -1,7 +1,6 @@
 """CLI entry point."""
 
 import asyncio
-import datetime
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional
