@@ -10,7 +10,7 @@ from click import ClickException
 from dotenv import load_dotenv
 
 from . import DEFAULT_PATH, GLOBAL_CONFIG_PATH, commands, exceptions, utils
-from .logger import setup_logger, setup_preinit_logger
+from .logger import _add_console_handler, setup_logger
 
 if TYPE_CHECKING:
     from . import Application, Config
@@ -290,9 +290,9 @@ def init(ctx: typer.Context) -> "Config":
         loaded_config.app.verbose = True
 
     logger.info("Configuration loaded successfully.")
-    logger.info("pre-init complete.")
 
-    setup_logger(loaded_config)
+    if loaded_config.app.verbose:
+        _add_console_handler()
 
     return loaded_config
 
@@ -314,7 +314,7 @@ def init_app(ctx: typer.Context) -> "Application":
 
 def main():
     """Main entry point for the CLI."""
-    setup_preinit_logger()
+    setup_logger()
 
     dotenv_paths = [Path(".env"), DEFAULT_PATH / ".env", Path.home() / ".cligram.env"]
     for dotenv_path in dotenv_paths:

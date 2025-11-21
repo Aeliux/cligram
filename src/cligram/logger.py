@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 from . import DEFAULT_LOGS_PATH
 
 if TYPE_CHECKING:
-    from . import Config
+    pass
 
 
 class ColoredNameFormatter(logging.Formatter):
@@ -63,28 +63,9 @@ class ColoredNameFormatter(logging.Formatter):
         return result
 
 
-def setup_preinit_logger():
-    """Setup a basic logger for pre-init stage logging.
-
-    it creates a log file in the default logs path
-    with the preinit prefix and current date.
-    """
-    log_path = Path(DEFAULT_LOGS_PATH / f"preinit-{_get_date()}.log")
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    logging.basicConfig(
-        level=logging.DEBUG,
-        filename=log_path,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    )
-
-
-def setup_logger(config: "Config"):
-    """Setup the logger based on the provided configuration.
-
-    Args:
-        config (Config): The configuration object containing logging settings.
-    """
-    log_file = config.base_path / "logs" / f"{_get_date()}.log"
+def setup_logger():
+    """Set up the main logger with file handler."""
+    log_file = DEFAULT_LOGS_PATH / f"{_get_date()}.log"
 
     logging.basicConfig(
         level=logging.DEBUG,
@@ -105,18 +86,21 @@ def setup_logger(config: "Config"):
     fh.setFormatter(fh_formatter)
     logger.addHandler(fh)
 
-    if config.app.verbose:
-        # Add rich logging for console output
-        from rich.logging import RichHandler
 
-        console_handler = RichHandler(
-            markup=True,
-            omit_repeated_times=False,
-        )
-        console_handler.setLevel(logging.DEBUG)
-        console_formatter = ColoredNameFormatter("%(name)s: %(message)s")
-        console_handler.setFormatter(console_formatter)
-        logger.addHandler(console_handler)
+def _add_console_handler():
+    # Add rich logging for console output
+    from rich.logging import RichHandler
+
+    logger = logging.getLogger()
+
+    console_handler = RichHandler(
+        markup=True,
+        omit_repeated_times=False,
+    )
+    console_handler.setLevel(logging.DEBUG)
+    console_formatter = ColoredNameFormatter("%(name)s: %(message)s")
+    console_handler.setFormatter(console_formatter)
+    logger.addHandler(console_handler)
 
 
 def _get_date():

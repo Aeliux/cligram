@@ -11,12 +11,7 @@ from .. import exceptions, utils
 if TYPE_CHECKING:
     from .. import Application, CustomSession, Proxy
 
-logger: logging.Logger = None  # type: ignore
-
-
-def setup_logger():
-    global logger
-    logger = logging.getLogger("cligram.tasks.telegram")
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 async def setup(
@@ -27,8 +22,6 @@ async def setup(
     disconnect_expected: bool = False,
 ):
     """Setup Telegram client."""
-    setup_logger()
-
     try:
         session = session or utils.get_session(app.config)
 
