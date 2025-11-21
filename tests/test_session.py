@@ -1,14 +1,7 @@
 import pytest
 
 from cligram.exceptions import SessionNotFoundError
-from cligram.session import CustomSession, get_search_paths
-
-
-def test_session_search_paths():
-    """Test session search path generation."""
-    paths = get_search_paths()
-
-    assert len(paths) > 0
+from cligram.session import CustomSession
 
 
 def test_session_initialization_memory():

@@ -32,7 +32,7 @@ class Application:
         self.device: utils.DeviceInfo = utils.get_device_info()
         """Information about the current device."""
 
-        self.state = StateManager(data_dir=self.config.data_path)
+        self.state = StateManager(data_dir=self.config.path.data_path)
         """"State manager for application state persistence."""
 
         self.shutdown_event: asyncio.Event = asyncio.Event()
@@ -191,7 +191,7 @@ class Application:
         # Setup platform-specific signal handlers
         self._setup_signal_handlers()
 
-        logger.debug(f"Loaded configuration: {self.config.path}")
+        logger.debug(f"Loaded configuration: {self.config.path.config_path}")
 
         if self.config.updated:
             self.console.print("[bold yellow]Configuration file updated[/bold yellow]")

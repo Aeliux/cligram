@@ -11,7 +11,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Tuple, overload
 
-from . import GLOBAL_CONFIG_PATH
+from . import DEFAULT_PATH, GLOBAL_CONFIG_PATH
 
 _config_instance: Optional["Config"] = None
 logger = logging.getLogger(__name__)
@@ -52,13 +52,19 @@ class ApiConfig:
     from_env: bool = field(init=False, default=False)
     """Indicates if the credentials were loaded from environment variables"""
 
+    _cached_identifier: Optional[str] = field(init=False, repr=False, default=None)
+
     @property
     def identifier(self) -> str:
         """Get unique identifier for the API credentials."""
+        if self._cached_identifier is not None:
+            return self._cached_identifier
+
         hasher = hashlib.sha256()
         hasher.update(f"{self.id}:{self.hash}".encode("utf-8"))
         digest = hasher.digest()
-        return base64.urlsafe_b64encode(digest).decode("utf-8")[:8]
+        self._cached_identifier = base64.urlsafe_b64encode(digest).decode("utf-8")[:8]
+        return self._cached_identifier
 
     @property
     def valid(self) -> bool:
@@ -445,9 +451,35 @@ class InteractiveConfig:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class PathInfo:
+    config_path: Path
+    """Path to the configuration file."""
+
+    is_global: bool
+    """Indicates if the configuration placed in the global config path."""
+
+    base_path: Path
+    """Base directory for storing Cligram data."""
+
+    data_path: Path
+    """Directory for application state (and sessions if not global)."""
+
+    session_path: Path
+    """Path to the session files for the current api configuration."""
+
+    def get_sessions(self) -> List[Path]:
+        """Get list of session files in the session directory."""
+        if not self.session_path.exists():
+            return []
+        return list(self.session_path.glob("*.session"))
+
+
 @dataclass
 class Config:
     """Application configuration root."""
+
+    _config_path: Path = field(repr=False, default=GLOBAL_CONFIG_PATH)
 
     app: AppConfig = field(default_factory=AppConfig)
     """Application behavior settings"""
@@ -461,11 +493,8 @@ class Config:
     interactive: InteractiveConfig = field(default_factory=InteractiveConfig)
     """Interactive mode settings"""
 
-    exclusions: List[str] = field(default_factory=list)
-    """List of usernames to exclude from processing"""
-
-    path: Path = field(default=GLOBAL_CONFIG_PATH)
-    """Path to the configuration file"""
+    path: PathInfo = field(init=False)
+    """Application paths."""
 
     updated: bool = False
     """Indicates if the configuration was updated with new fields"""
@@ -473,18 +502,31 @@ class Config:
     overridden: bool = False
     """Indicates if the configuration was overridden via CLI"""
 
-    temp: Dict[str, Any] = field(default_factory=dict)
+    temp: Dict[str, Any] = field(init=False, repr=False, default_factory=dict)
     """Temporary in-memory configuration data"""
 
-    @property
-    def base_path(self) -> Path:
-        """Get base directory of the configuration file."""
-        return self.path.parent
+    def __post_init__(self):
+        self.path = self._get_path_info(self)
 
-    @property
-    def data_path(self) -> Path:
-        """Get data directory path."""
-        return self.base_path / "data"
+    @staticmethod
+    def _get_path_info(config: "Config") -> PathInfo:
+        config_path = config._config_path
+        is_global = config_path.resolve() == GLOBAL_CONFIG_PATH.resolve()
+        base_path = config_path.parent
+        data_path = base_path / "data"
+
+        if is_global:
+            session_path = DEFAULT_PATH / "sessions" / config.telegram.api.identifier
+        else:
+            session_path = data_path / "sessions" / config.telegram.api.identifier
+
+        return PathInfo(
+            config_path=config_path,
+            is_global=is_global,
+            base_path=base_path,
+            data_path=data_path,
+            session_path=session_path,
+        )
 
     @overload
     @classmethod
@@ -529,13 +571,13 @@ class Config:
         # Parse main sections
         logger.info("Parsing configuration")
         config = cls(
+            _config_path=config_full_path,
             app=AppConfig._from_dict(original_data.get("app", {})),
             telegram=TelegramConfig._from_dict(original_data.get("telegram", {})),
             scan=ScanConfig._from_dict(original_data.get("scan", {})),
             interactive=InteractiveConfig._from_dict(
                 original_data.get("interactive", {})
             ),
-            path=config_full_path,
         )
 
         # Apply overrides
@@ -606,7 +648,7 @@ class Config:
 
     def save(self, path: Optional[Path | str] = None):
         """Save configuration to JSON file."""
-        save_path = Path(path) if path else self.path
+        save_path = Path(path) if path else self.path.config_path
         logger.info(f"Saving configuration to file: {save_path}")
 
         if self.overridden:
@@ -789,15 +831,16 @@ class Config:
         # Create backup
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_path = (
-            self.path.parent / f"{self.path.stem}.backup.{timestamp}{self.path.suffix}"
+            self.path.base_path
+            / f"{self.path.config_path.stem}.backup.{timestamp}{self.path.config_path.suffix}"
         )
         logger.info(f"Creating backup of old config at: {backup_path}")
         with open(backup_path, "w") as f:
             json.dump(old_data, f, indent=2)
         logger.info(f"Backup created at: {backup_path}")
 
-        logger.info(f"Saving updated config to: {self.path}")
+        logger.info(f"Saving updated config to: {self.path.config_path}")
         # Save updated config
-        with open(self.path, "w") as f:
+        with open(self.path.config_path, "w") as f:
             json.dump(new_data, f, indent=2)
-        logger.info(f"Updated config saved to: {self.path}")
+        logger.info(f"Updated config saved to: {self.path.config_path}")

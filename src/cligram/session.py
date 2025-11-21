@@ -2,35 +2,13 @@
 
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, TypeVar, Union, overload
+from typing import Any, Dict, Optional, Tuple, TypeVar, Union, overload
 
 from telethon.sessions import SQLiteSession
 
 from . import Config, exceptions, utils
 
 _TDefault = TypeVar("_TDefault")
-
-
-def get_search_paths(config: Optional[Config] = None) -> List[Path]:
-    """Get a list of all session search paths."""
-    if config is None:
-        config = Config.get_config(raise_if_failed=True)
-
-    return [
-        Path.cwd(),
-        Path.cwd() / "sessions",
-        config.base_path,
-        get_config_session_path(config),
-        get_global_session_path(config),
-    ]
-
-
-def get_config_session_path(config: "Config") -> Path:
-    return config.data_path / "sessions"
-
-
-def get_global_session_path(config: "Config") -> Path:
-    return Path.home() / ".cligram" / "sessions" / config.telegram.api.identifier
 
 
 class CustomSession(SQLiteSession):
@@ -43,14 +21,12 @@ class CustomSession(SQLiteSession):
             session_id: Session identifier/name or full path
             create: Whether to create the session file if not found
         """
+        config = Config.get_config(raise_if_failed=True)
+        session_path: Path = Path(session_id) if session_id else None  # type: ignore
+
         if session_id is None:
             super().__init__(None)
-            return
-
-        session_path = Path(session_id)
-
-        # If full path provided, use it directly
-        if (
+        elif (
             session_path.suffix == ".session"
             or session_path.is_absolute()
             or os.path.sep in session_id
@@ -61,30 +37,25 @@ class CustomSession(SQLiteSession):
                 )
             super().__init__(str(session_path))
         else:
-            # Search in provided paths
-            search_paths = get_search_paths()
-            found_path = None
-            for search_dir in search_paths:
-                candidate = search_dir / f"{session_id}.session"
-                if candidate.exists():
-                    found_path = candidate
+            sessions = config.path.get_sessions()
+            target = None
+            for s in sessions:
+                if s.stem == session_id:
+                    target = s
                     break
 
-            # If not found, create in last path
-            if found_path is None:
+            if target is None:
                 if not create:
                     raise exceptions.SessionNotFoundError(
                         f"Session file not found: {session_id}"
                     )
 
-                last_dir = search_paths[-1]
-                last_dir.mkdir(parents=True, exist_ok=True)
-                found_path = last_dir / f"{session_id}.session"
+                target = config.path.session_path / f"{session_id}.session"
 
-            super().__init__(str(found_path))
+            super().__init__(str(target))
+
         self._initialize_metadata_table()
 
-        config = Config.get_config(raise_if_failed=True)
         api_id = config.telegram.api.identifier
         session_api_id = self.get_metadata("api_id")
         if session_api_id is None:
@@ -153,16 +124,3 @@ class CustomSession(SQLiteSession):
         title = self.get_metadata("device_title", "Unknown Device")
         model = self.get_metadata("device_model", "Unknown Model")
         return title, model
-
-    @classmethod
-    def list_sessions(cls) -> List[str]:
-        """List all session files."""
-        sessions: Dict[str, Path] = {}
-        for search_dir in get_search_paths():
-            if not search_dir.exists():
-                continue
-            for session_file in search_dir.glob("*.session"):
-                session_id = session_file.stem
-                if session_id not in sessions:
-                    sessions[session_id] = session_file
-        return [str(s) for s in sessions.values()]

@@ -12,10 +12,10 @@ from rich import get_console
 from rich.progress import BarColumn, Progress, TextColumn
 from rich.status import Status
 
-from .. import DEFAULT_PATH, GLOBAL_CONFIG_PATH, CustomSession, exceptions, utils
+from .. import DEFAULT_PATH, GLOBAL_CONFIG_PATH, exceptions, utils
 
 if TYPE_CHECKING:
-    from .. import Application, CustomSession
+    from .. import Application
 
 TRANSFER_PROTOCOL_VERSION = 1
 
@@ -70,7 +70,7 @@ async def export(app: "Application"):
     cfg: _ExportConfig = app.config.temp["cligram.transfer:export"]
     interactive = cfg == _ExportConfig()
 
-    sessions = CustomSession.list_sessions()
+    sessions = app.config.path.get_sessions()
     enable_dotenv = app.config.telegram.api.from_env and app.config.telegram.api.valid
 
     if interactive:
@@ -134,7 +134,7 @@ async def export(app: "Application"):
     ex_all_states = "*" in cfg.exported_states
 
     cfg.exported_sessions = [
-        path
+        str(path)
         for path in sessions
         if ex_all_sessions or Path(path).stem in cfg.exported_sessions
     ]
@@ -161,13 +161,14 @@ async def export(app: "Application"):
             data = app.config.to_dict()
             progress.update(task, advance=1)
 
-            is_global = app.config.path == GLOBAL_CONFIG_PATH
             json = utils.json.dumps(data, indent=4)
             progress.update(task, advance=1)
 
             header = {
                 "cligram.transfer.type": _FileType.CONFIG.value,
-                "cligram.transfer.config.type": "local" if not is_global else "global",
+                "cligram.transfer.config.type": (
+                    "local" if not app.config.path.is_global else "global"
+                ),
             }
             archive.add_bytes(
                 name="config.json",
@@ -418,8 +419,6 @@ async def _load_archive(password: str | None, data: bytes) -> utils.Archive:
 
 async def import_data(app: "Application"):
     """Import cligram data."""
-    from ..session import get_global_session_path
-
     app.status.update("Preparing data import...")
 
     cfg: _ImportConfig = app.config.temp["cligram.transfer:import"]
@@ -455,9 +454,7 @@ async def import_data(app: "Application"):
         task = progress.add_task(f"Importing {session_name} session", total=1)
 
         session_data: bytes = entry.content  # type: ignore
-        session_path = (
-            get_global_session_path(app.config) / f"{session_name}{session_suffix}"
-        )
+        session_path = app.config.path.session_path / f"{session_name}{session_suffix}"
         if session_path.exists():
             c = 1
             while True:

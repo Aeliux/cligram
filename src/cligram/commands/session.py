@@ -36,10 +36,8 @@ def list_sessions(
     ctx: typer.Context,
 ):
     """List all available Telegram sessions."""
-    from .. import CustomSession
-
-    ctx.obj["cligram.init:core"]()
-    sessions = CustomSession.list_sessions()
+    config: "Config" = ctx.obj["cligram.init:core"]()
+    sessions = config.path.get_sessions()
     if sessions:
         typer.echo("Available sessions:")
         for s in sessions:
