@@ -9,7 +9,7 @@ import typer
 from click import ClickException
 from dotenv import load_dotenv
 
-from . import DEFAULT_PATH, commands, exceptions, utils
+from . import DEFAULT_PATH, GLOBAL_CONFIG_PATH, commands, exceptions, utils
 from .logger import setup_logger, setup_preinit_logger
 
 if TYPE_CHECKING:
@@ -271,16 +271,13 @@ def init(ctx: typer.Context) -> "Config":
     Returns:
         Config: Loaded configuration instance.
     """
-    from .config import Config, find_config_file
+    from .config import Config
 
-    lconfig = Config.get_config(raise_if_failed=False)
-    if lconfig is not None:
-        return lconfig
     config: Optional[Path] = ctx.obj["cligram.args:config"]
 
     try:
         if not config:
-            config = find_config_file(raise_error=True)
+            config = GLOBAL_CONFIG_PATH
         loaded_config = Config.from_file(
             config, overrides=ctx.obj["cligram.args:overrides"]
         )

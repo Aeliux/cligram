@@ -1,10 +1,8 @@
 import json
-from pathlib import Path
 
 import pytest
 
-from cligram import GLOBAL_CONFIG_PATH, Config, InteractiveMode, ScanMode
-from cligram.config import get_search_paths
+from cligram import Config, InteractiveMode, ScanMode
 
 
 def test_config_from_file(config_file, sample_config_data):
@@ -232,11 +230,3 @@ def test_trigger_update(sample_config_data, temp_dir):
     assert config.scan.rapid_save is True
     assert config.telegram.connection.proxies == ["test_proxy"]
     assert config.telegram.connection.direct is False
-
-
-def test_get_search_paths():
-    assert GLOBAL_CONFIG_PATH == Path.home() / ".cligram" / "config.json"
-    paths = get_search_paths()
-    assert isinstance(paths, list)
-    assert Path.cwd() in paths
-    assert GLOBAL_CONFIG_PATH.parent in paths

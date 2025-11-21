@@ -11,7 +11,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Tuple, overload
 
-from . import GLOBAL_CONFIG_PATH, exceptions
+from . import GLOBAL_CONFIG_PATH
 
 _config_instance: Optional["Config"] = None
 logger = logging.getLogger(__name__)
@@ -801,41 +801,3 @@ class Config:
         with open(self.path, "w") as f:
             json.dump(new_data, f, indent=2)
         logger.info(f"Updated config saved to: {self.path}")
-
-
-def get_search_paths() -> List[Path]:
-    """Get a list of all configuration search paths."""
-    return [Path.cwd(), GLOBAL_CONFIG_PATH.parent]
-
-
-@overload
-def find_config_file(raise_error: Literal[True]) -> Path: ...
-
-
-@overload
-def find_config_file(raise_error: Literal[False]) -> Optional[Path]: ...
-
-
-def find_config_file(raise_error: bool = False) -> Optional[Path]:  # pragma: no cover
-    """Search for configuration file in standard locations."""
-    search_paths = get_search_paths()
-    config_filenames = ["config.json", "cligram_config.json"]
-    logger.info(f"Searching for configuration files in: {search_paths}")
-
-    for search_dir in search_paths:
-        for filename in config_filenames:
-            candidate = search_dir / filename
-            if candidate.exists():
-                logger.info(f"Found configuration file: {candidate}")
-                return candidate.resolve()
-            else:
-                logger.debug(f"Configuration file not found at: {candidate}")
-
-    if raise_error:
-        logger.error(f"No configuration file found in {search_paths}.")
-        raise exceptions.ConfigSearchError(
-            "No configuration file found in expected locations."
-        )
-
-    logger.warning(f"No configuration file found in {search_paths}.")
-    return None
