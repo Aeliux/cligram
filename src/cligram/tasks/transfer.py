@@ -260,7 +260,9 @@ async def import_early(cfg: _ImportConfig):
     data: bytes
     if cfg.is_data:
         if isinstance(cfg.input_value, str):
-            data = base64.b64decode(cfg.input_value)
+            # trim any whitespace/newlines
+            b64d = cfg.input_value.strip().strip('"').strip("'").strip("\n").strip("\r")
+            data = base64.b64decode(b64d)
         else:
             raise TypeError("Input value must be a base64 string when is_data is True.")
     else:
