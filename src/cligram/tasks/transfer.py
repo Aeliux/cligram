@@ -7,11 +7,12 @@ from typing import TYPE_CHECKING, List, Optional
 
 import aiofiles
 import questionary
+from click import ClickException
 from rich import get_console
 from rich.progress import BarColumn, Progress, TextColumn
 from rich.status import Status
 
-from .. import DEFAULT_PATH, GLOBAL_CONFIG_PATH, CustomSession, utils
+from .. import DEFAULT_PATH, GLOBAL_CONFIG_PATH, CustomSession, exceptions, utils
 
 if TYPE_CHECKING:
     from .. import Application, CustomSession
@@ -275,7 +276,18 @@ async def import_early(cfg: _ImportConfig):
 
     status.update("Loading archive...")
 
-    archive = await utils.Archive.from_bytes(data=data, password=cfg.password)
+    try:
+        archive = await _load_archive(cfg.password, data)
+    except ClickException:
+        status.stop()
+        if not cfg.password:
+            password = await questionary.password(
+                "The archive is password protected. Please enter the password:",
+            ).ask_async()
+            archive = await _load_archive(password, data)
+            status.start()
+        else:
+            raise
 
     config_entry: Optional[utils.ArchiveEntry] = None
     config_path: str = str(GLOBAL_CONFIG_PATH)
@@ -391,6 +403,13 @@ async def import_early(cfg: _ImportConfig):
             console.print(
                 "[yellow]Please restart the import process and reject configuration and .env import to continue.[/yellow]"
             )
+
+
+async def _load_archive(password: str | None, data: bytes) -> utils.Archive:
+    try:
+        return await utils.Archive.from_bytes(data=data, password=password)
+    except exceptions.ArchiveError as e:
+        raise ClickException(f"Failed to load archive: {e}") from e
 
 
 async def import_data(app: "Application"):

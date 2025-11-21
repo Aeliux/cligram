@@ -1,9 +1,17 @@
 # import everything from submodules
-from .base import CligramError, VersionError  # isort:skip
+from .base import CligramError, VersionError, InvalidPathError  # isort:skip
 from .application import (
     ApplicationAlreadyRunningError,
     ApplicationError,
     ApplicationNotRunningError,
+)
+from .archive import (
+    ArchiveError,
+    EmptyArchiveError,
+    InvalidArchiveError,
+    InvalidCompressionTypeError,
+    InvalidPasswordError,
+    SizeLimitExceededError,
 )
 from .config import ConfigError, ConfigSearchError
 from .connection import ConnectionError, NoWorkingConnectionError
@@ -22,4 +30,11 @@ __all__ = [
     "ApplicationAlreadyRunningError",
     "ConfigError",
     "ConfigSearchError",
+    "ArchiveError",
+    "InvalidArchiveError",
+    "InvalidPasswordError",
+    "InvalidCompressionTypeError",
+    "SizeLimitExceededError",
+    "EmptyArchiveError",
+    "InvalidPathError",
 ]

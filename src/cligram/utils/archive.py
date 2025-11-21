@@ -10,9 +10,11 @@ from pathlib import Path
 from typing import Dict, Iterator, List, Optional, Union
 
 import aiofiles
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
+from .. import exceptions
 
 
 class CompressionType(Enum):
@@ -381,7 +383,9 @@ class Archive:
             try:
                 self.compression = CompressionType(compression)
             except ValueError:
-                raise ValueError(f"Invalid compression type: {compression}")
+                raise exceptions.InvalidCompressionTypeError(
+                    f"Invalid compression type: {compression}"
+                )
         else:
             self.compression = compression
 
@@ -510,7 +514,7 @@ class Archive:
         """Check if adding data would exceed size limit."""
         current_size = sum(entry.size for entry in self._entries.values())
         if current_size + additional_size > self.MAX_SIZE:
-            raise ValueError(
+            raise exceptions.SizeLimitExceededError(
                 f"Archive size would exceed {self.MAX_SIZE / (1024*1024):.1f} MB limit. "
                 f"Current: {current_size / (1024*1024):.1f} MB, "
                 f"Adding: {additional_size / (1024*1024):.1f} MB"
@@ -520,14 +524,21 @@ class Archive:
         """Load archive from bytes."""
         # Decrypt if needed
         if self._cipher:
-            loop = asyncio.get_event_loop()
-            # Fernet expects base64, so encode it first
-            b64_data = await loop.run_in_executor(None, base64.urlsafe_b64encode, data)
-            data = await loop.run_in_executor(None, self._cipher.decrypt, b64_data)
+            try:
+                loop = asyncio.get_event_loop()
+                # Fernet expects base64, so encode it first
+                b64_data = await loop.run_in_executor(
+                    None, base64.urlsafe_b64encode, data
+                )
+                data = await loop.run_in_executor(None, self._cipher.decrypt, b64_data)
+            except InvalidToken:
+                raise exceptions.InvalidPasswordError(
+                    "Incorrect password for archive decryption."
+                )
 
         # Check size
         if len(data) > self.MAX_SIZE:
-            raise ValueError(
+            raise exceptions.SizeLimitExceededError(
                 f"Archive size {len(data) / (1024*1024):.1f} MB exceeds {self.MAX_SIZE / (1024*1024):.1f} MB limit"
             )
 
@@ -540,12 +551,11 @@ class Archive:
         )
 
     def _parse_tar_to_entries(self, data: bytes) -> Dict[str, ArchiveEntry]:
-        """Parse tar archive to entries (sync)."""
+        """Parse tar archive to entries."""
         buffer = io.BytesIO(data)
         entries = {}
         tar: tarfile.TarFile
 
-        # Try to open with specified compression first
         try:
             mode = self._get_tar_mode("r")
             with tarfile.open(fileobj=buffer, mode=mode) as tar:  # type: ignore
@@ -558,20 +568,8 @@ class Archive:
 
                     entry = ArchiveEntry.from_tar_member(member, content)
                     entries[entry.name] = entry
-        except (tarfile.ReadError, tarfile.CompressionError):
-            # Fallback to auto-detect compression if specified mode fails
-            buffer.seek(0)
-            with tarfile.open(fileobj=buffer, mode="r:*") as tar:
-                for member in tar.getmembers():
-                    content = None
-                    if member.isfile():
-                        file_obj = tar.extractfile(member)
-                        if file_obj:
-                            content = file_obj.read()
-
-                    entry = ArchiveEntry.from_tar_member(member, content)
-                    entries[entry.name] = entry
-
+        except tarfile.TarError as e:
+            raise exceptions.InvalidArchiveError(f"Failed to parse archive: {e}") from e
         return entries
 
     def _build_tar_from_entries(self) -> bytes:
@@ -633,7 +631,7 @@ class Archive:
             Archive bytes
         """
         if not self._entries:
-            raise ValueError("Archive is empty.")
+            raise exceptions.EmptyArchiveError("Archive is empty.")
 
         # Build tar archive
         loop = asyncio.get_event_loop()
@@ -680,7 +678,7 @@ class Archive:
             raise FileNotFoundError(f"File not found: {file_path}")
 
         if not file_path.is_file():
-            raise ValueError(f"Path is not a file: {file_path}")
+            raise exceptions.InvalidPathError(f"Path is not a file: {file_path}")
 
         name = arcname or file_path.name
         entry = await ArchiveEntry.from_file(

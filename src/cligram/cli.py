@@ -184,7 +184,8 @@ def import_data(
         None,
         "-p",
         "--password",
-        help="Password for decrypting the imported data",
+        help="Password for decrypting the imported data (not secure, if not provided, "
+        "you will be prompted during import if needed)",
     ),
 ):
     """Import cligram data."""
