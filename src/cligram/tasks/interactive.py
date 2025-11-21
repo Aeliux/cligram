@@ -772,7 +772,8 @@ async def interactive_callback(app: "Application", client: TelegramClient):
         # mark message as read
         await client(
             functions.messages.ReadHistoryRequest(
-                peer=msg.peer_id, max_id=msg.id  # type: ignore
+                peer=msg.peer_id,
+                max_id=msg.id,  # type: ignore
             )
         )
 

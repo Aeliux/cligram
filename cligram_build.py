@@ -3,12 +3,10 @@
 # Retrieved 2025-11-20, License - CC BY-SA 4.0
 
 import shutil
-import sys
 from distutils.command.build_ext import build_ext
-from distutils.errors import CCompilerError, DistutilsExecError, DistutilsPlatformError
 from pathlib import Path
 
-from setuptools import Distribution, Extension, setup
+from setuptools import Distribution, Extension
 
 
 def build():

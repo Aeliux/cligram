@@ -12,9 +12,9 @@ TARGETS = ["src", "scripts", "tests"]
 
 def run_command(cmd: list[str], description: str) -> bool:
     """Run a command and return True if successful."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Running: {description}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     try:
         subprocess.run(cmd, cwd=PROJECT_ROOT, check=True)
         print(f"✓ {description} completed")
@@ -28,12 +28,12 @@ def print_summary(
     results: dict[str, bool], success_msg: str = "PASSED", fail_msg: str = "FAILED"
 ):
     """Print a summary of check/fix results."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("SUMMARY")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     for name, passed in results.items():
         status = f"✓ {success_msg}" if passed else f"✗ {fail_msg}"
         print(f"{name:15} {status}")
 
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")

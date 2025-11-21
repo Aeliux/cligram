@@ -515,9 +515,9 @@ class Archive:
         current_size = sum(entry.size for entry in self._entries.values())
         if current_size + additional_size > self.MAX_SIZE:
             raise exceptions.SizeLimitExceededError(
-                f"Archive size would exceed {self.MAX_SIZE / (1024*1024):.1f} MB limit. "
-                f"Current: {current_size / (1024*1024):.1f} MB, "
-                f"Adding: {additional_size / (1024*1024):.1f} MB"
+                f"Archive size would exceed {self.MAX_SIZE / (1024 * 1024):.1f} MB limit. "
+                f"Current: {current_size / (1024 * 1024):.1f} MB, "
+                f"Adding: {additional_size / (1024 * 1024):.1f} MB"
             )
 
     async def _load_from_bytes(self, data: bytes) -> None:
@@ -560,7 +560,7 @@ class Archive:
         total_size = sum(entry.size for entry in self._entries.values())
         if total_size > self.MAX_SIZE:
             raise exceptions.SizeLimitExceededError(
-                f"Archive content size {total_size / (1024*1024):.1f} MB exceeds {self.MAX_SIZE / (1024*1024):.1f} MB limit"
+                f"Archive content size {total_size / (1024 * 1024):.1f} MB exceeds {self.MAX_SIZE / (1024 * 1024):.1f} MB limit"
             )
 
     def _parse_tar_to_entries(self, data: bytes) -> Dict[str, ArchiveEntry]:
@@ -591,7 +591,9 @@ class Archive:
         tar: tarfile.TarFile
 
         mode = self._get_tar_mode("w")
-        with tarfile.open(fileobj=buffer, mode=mode, format=self._get_tar_format()) as tar:  # type: ignore
+        with tarfile.open(
+            fileobj=buffer, mode=mode, format=self._get_tar_format()
+        ) as tar:  # type: ignore
             for entry in self._entries.values():
                 tar_info = entry.to_tar_info()
 

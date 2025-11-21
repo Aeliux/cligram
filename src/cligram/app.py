@@ -104,7 +104,8 @@ class Application:
             for sig in (signal.SIGTERM, signal.SIGINT):
                 try:
                     asyncio.get_event_loop().add_signal_handler(
-                        sig, lambda s=sig: asyncio.create_task(self._shutdown(s))  # type: ignore
+                        sig,
+                        lambda s=sig: asyncio.create_task(self._shutdown(s)),  # type: ignore
                     )
                 except NotImplementedError:
                     logger.warning(f"Failed to set handler for signal {sig}")
