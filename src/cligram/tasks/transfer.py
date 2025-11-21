@@ -409,7 +409,9 @@ async def import_early(cfg: _ImportConfig):
 
 async def _load_archive(password: str | None, data: bytes) -> utils.Archive:
     try:
-        return await utils.Archive.from_bytes(data=data, password=password)
+        return await utils.Archive.from_bytes(
+            data=data, password=password, compression="xz"
+        )
     except exceptions.ArchiveError as e:
         raise ClickException(f"Failed to load archive: {e}") from e
 
