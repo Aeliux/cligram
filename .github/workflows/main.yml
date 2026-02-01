@@ -11,7 +11,8 @@ on:
       - ".gitignore"
     branches:
       - main
-      - "refs/tags/v*"
+    tags:
+      - "v*"
   pull_request:
     branches:
       - main
