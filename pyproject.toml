@@ -98,8 +98,7 @@ poetry-dynamic-versioning = { version = ">=1.0.0,<2.0.0", extras = ["plugin"] }
 [tool.poetry-dynamic-versioning]
 enable = true
 vcs = "git"
-metadata = true
-tagged-metadata = true
+metadata = false
 style = "pep440"
 strict = true
 ignore-untracked = true
