@@ -294,7 +294,7 @@ def install_dependencies(poetry):
 
     try:
         result = subprocess.run(
-            [poetry, "install"],
+            [poetry, "install", "--all-extras", "--all-groups"],
             cwd=project_root,
             check=True,
             capture_output=True,
@@ -345,6 +345,21 @@ def setup_precommit_hooks(poetry):
             timeout=30,
         )
         print("✓ Pre-commit hooks installed successfully!")
+
+        # Run pre-commit to ensure it's working
+        subprocess.run(
+            [
+                poetry,
+                "run",
+                "pre-commit",
+                "run",
+                "--all-files",
+                "--show-diff-on-failure",
+            ],
+            cwd=project_root,
+            check=True,
+        )
+        print("✓ Pre-commit hooks verified successfully!")
     except subprocess.CalledProcessError as e:
         print(f"⚠ Failed to install pre-commit hooks: {e}", file=sys.stderr)
         print("  (This is optional - continuing anyway)")

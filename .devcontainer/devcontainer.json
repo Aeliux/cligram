@@ -6,6 +6,19 @@
 		"dockerfile": "Dockerfile",
 		"context": ".."
 	},
+	"features": {
+		"ghcr.io/devcontainers/features/common-utils:2": {
+			"installZsh": "false",
+			"username": "vscode",
+			"userUid": "1000",
+			"userGid": "1000",
+			"upgradePackages": "true"
+		},
+		"ghcr.io/devcontainers/features/git:1": {
+			"version": "latest",
+			"ppa": "false"
+		}
+	},
 	// Use 'postCreateCommand' to run commands after the container is created.
 	"postCreateCommand": "scripts/init.py",
 	// Configure tool-specific properties.
@@ -21,6 +34,7 @@
 				"matangover.mypy",
 				"donjayamanne.python-environment-manager"
 			]
-		}
+		},
+		"remoteUser": "vscode"
 	}
 }
